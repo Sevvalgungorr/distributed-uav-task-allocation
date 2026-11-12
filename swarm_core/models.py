@@ -15,3 +15,12 @@ class UAV:
         dx = self.x - x
         dy = self.y - y
         return (dx**2 + dy**2) ** 0.5
+
+# IHA'lara atanacak gorevlerin bilgilerini tutar
+@dataclass
+class Task:
+    task_id: int           # Gorev numarasi
+    x: float              # Gorevin X konumu
+    y: float              # Gorevin Y konumu
+    priority: int = 1     # Gorev onceligi
+    status: str = "OPEN"  # Gorevin durumu
