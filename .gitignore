@@ -1,0 +1,19 @@
+# Python sanal ortami
+.venv/
+venv/
+
+# Python gecici dosyalari
+__pycache__/
+*.pyc
+
+# VS Code yerel ayarlari
+.vscode/
+
+# Isletim sistemi dosyalari
+.DS_Store
+Thumbs.db
+
+# Gizli bilgiler
+.env
+.env.*
+!.env.example
