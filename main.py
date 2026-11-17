@@ -1,30 +1,8 @@
 
-from swarm_core.models import UAV, Task
-from swarm_core.coverage import generate_zigzag
+from swarm_core.models import UAV
+from swarm_core.tasks import create_tasks
 
 
-
-# 500x400 metrelik alani 20 gorev bolgesine ayiriyoruz
-#20 göreve ayırmamızın sebebi, 5 İHA'nın tarayacağı alanı küçük parçalara bölerek görev paylaşımını kolaylaştırmak.
-#Ileride CBBA algoritmasi bu gorevleri IHA'lar arasinda paylastiracak.
-
-def create_tasks():
-    tasks = []
-    task_id = 1
-
-    for row in range(4):
-        for col in range(5):
-            x = col * 100 + 50
-            y = row * 100 + 50
-
-            waypoints = generate_zigzag(x, y)
-
-            task = Task(task_id=task_id, x=x, y=y, waypoints=waypoints)
-            tasks.append(task)
-
-            task_id += 1
-
-    return tasks
 # Bu blok sadece main.py dogrudan calistirildiginda calisir.
 # Test dosyasindan import edildiginde IHA olusturma ve yazdirma islemleri calismaz.
 if __name__ == "__main__":

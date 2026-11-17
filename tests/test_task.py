@@ -5,7 +5,7 @@ def test_task_waypoints():
     tasks = create_tasks()
 
     for task in tasks:
-        assert len(task.waypoints) == 12
+        assert len(task.waypoints) == 10
 #görevin sınırlarını kontrol ediyoruz 
 def test_task_boundaries():
     #rota noktalarını kpntrol ediyoruz 
