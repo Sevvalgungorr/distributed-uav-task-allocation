@@ -1,5 +1,5 @@
 
-from dataclasses import dataclass
+from dataclasses import dataclass,field
 # __init__ gibi metotlari otomatik olusturarak sinifi daha kisa yazmamizi saglar
 #nesneyi ekrana yazdırmamızı sağlar 
 # IHA'nin temel bilgilerini tutan sinif
@@ -24,3 +24,4 @@ class Task:
     y: float              # Gorevin Y konumu
     priority: int = 1     # Gorev onceligi
     status: str = "OPEN"  # Gorevin durumu
+    waypoints: list = field(default_factory=list)  # Gorevin zigzag rota noktalari
