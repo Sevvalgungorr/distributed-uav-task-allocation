@@ -1,7 +1,8 @@
 from swarm_core.models import Task
 from swarm_core.coverage import generate_zigzag
-
-# 500x400 metrelik alanda 20 görev oluşturuyoruz
+# 500x400 metrelik alani 20 gorev bolgesine ayiriyoruz
+#20 göreve ayırmamızın sebebi, 5 İHA'nın tarayacağı alanı küçük parçalara bölerek görev paylaşımını kolaylaştırmak.
+#Ileride CBBA algoritmasi bu gorevleri IHA'lar arasinda paylastiracak.
 def create_tasks():
     tasks = []
     task_id = 1
