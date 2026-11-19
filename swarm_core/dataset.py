@@ -22,6 +22,20 @@ def load_boundary(path):
     return [(x, y) for x, y in outer_ring]
 
 
+def load_obstacles(path):
+    """Engelleri poligon listesi olarak döndürür; dosyada engel yoksa boş liste.
+
+    Her engel, dış halkasının [(x, y), ...] köşe listesidir.
+    """
+    features = _load_features(path)
+    # h1.json'da "obstacles" nesnesi var ama geometrisi null (engelsiz senaryo).
+    geometry = features.get("obstacles", {}).get("geometry")
+    if geometry is None:
+        return []
+    polygons = geometry["coordinates"]
+    return [[(x, y) for x, y in polygon[0]] for polygon in polygons]
+
+
 def load_tasks(path):
     """Her tarama çizgisini bir Task olarak döndürür.
 

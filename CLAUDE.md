@@ -239,6 +239,7 @@ Hocanın "görevlerin akademik dayanağı" sorusu için görevleri CoverageTasks
 ## 13. Doğrulanmış deney parametreleri (Grøntved vd. 2023 tam metninden)
 
 - **Hareket modeli:** v_max = 3 m/s, a_max = 1 m/s², hız rampası modeli (görevler arasında tam duruş).
+  - *Simülasyonda bilinen küçük sapma (19 Kasım 2026):* `swarm_sim/fly_task.py` ile AC10_0000 görev 1–4 uçuşunda son görevde ölçülen en yüksek yatay hız 3,13 m/s (sınırın yaklaşık %4 üstü). Koddaki hız komutu 3 m/s ile sınırlı; aşımın PX4 hız denetleyicisinin takip sapmasından kaynaklandığı düşünülüyor (doğrulanmadı).
 - **Puan:** zamana göre indirimli ödül, λ = 0.95. (trajallocpy kodunda 0.99 yazıyor, makale 0.95 kullanıyor.) Ödüller sabit.
 - **Kapasite:** L_t = azami uçuş süresi (saniye).
   - Ana karşılaştırma: 2 İHA → 1200 s

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from swarm_core.dataset import load_boundary, load_tasks
+from swarm_core.dataset import load_boundary, load_obstacles, load_tasks
 
 H1_PATH = Path(__file__).resolve().parent.parent / "scenarios" / "h1.json"
 
@@ -31,3 +31,22 @@ def test_h1_tasks_inside_boundary_box():
         for x, y in task.waypoints:
             assert min_x <= x <= max_x
             assert min_y <= y <= max_y
+
+
+AC10_PATH = Path(__file__).resolve().parent.parent / "scenarios" / "AC10_0000.json"
+
+
+def test_ac10_task_count():
+    assert len(load_tasks(AC10_PATH)) == 107
+
+
+def test_ac10_area_and_obstacles():
+    boundary = load_boundary(AC10_PATH)
+    xs = [x for x, _ in boundary]
+    ys = [y for _, y in boundary]
+    assert (min(xs), max(xs), min(ys), max(ys)) == (0.0, 100.0, 0.0, 100.0)
+    assert len(load_obstacles(AC10_PATH)) == 10
+
+
+def test_h1_has_no_obstacles():
+    assert load_obstacles(H1_PATH) == []

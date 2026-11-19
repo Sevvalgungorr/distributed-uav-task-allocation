@@ -1,14 +1,24 @@
-"""h1.json'daki bir tarama görevini tek İHA ile uçar (PX4 SITL + MAVSDK 4.x).
+"""CoverageTasks senaryosundaki görevleri tek İHA ile sırayla uçar (PX4 SITL + MAVSDK 4.x).
+
+Kullanım:
+    python -m swarm_sim.fly_task scenarios/AC10_0000.json --tasks 1 2 3 4
+
+Her görev için: görevin başlangıç noktasına git, çizgi boyunca bitiş noktasına uç,
+sonra sıradaki göreve geç. En sonda bulunduğu yere in.
+Çizgiler veri setindeki yönde (ilk nokta -> ikinci nokta) uçulur; yön seçimi CBBA'nın işi olacak.
 
 Koordinat dönüşümü:
 - Veri setindeki alanın sol alt köşesi (min x, min y) = İHA'nın kalktığı nokta.
 - Veri seti x ekseni -> PX4 yerel doğu (east), y ekseni -> PX4 yerel kuzey (north).
 - Veri seti koordinatları metre kabul edilir (1 birim = 1 m).
+
+UYARI: Veri setindeki engeller (obstacles) Gazebo dünyasında fiziksel olarak YOKTUR.
+Bu uçuş yalnızca gösterim amaçlıdır; engelden kaçınma veya çarpışma kontrolü yapılmaz.
 """
 
+import argparse
 import asyncio
 import math
-from pathlib import Path
 
 from mavsdk.asyncio import ComponentType, Configuration, Mavsdk
 from mavsdk.asyncio.plugins.action import ActionAsync
@@ -20,7 +30,7 @@ from mavsdk.asyncio.plugins.offboard import (
 )
 from mavsdk.asyncio.plugins.telemetry import TelemetryAsync
 
-from swarm_core.dataset import load_boundary, load_tasks
+from swarm_core.dataset import load_boundary, load_obstacles, load_tasks
 from swarm_sim.takeoff_land import (
     CONNECTION_URL,
     STEP_TIMEOUT_S,
@@ -33,8 +43,6 @@ from swarm_sim.takeoff_land import (
     wait_for_health,
 )
 
-SCENARIO_PATH = Path(__file__).resolve().parent.parent / "scenarios" / "h1.json"
-TASK_ID = 3                 # Uçulacak görev (h1.json'daki sırası, 1'den başlar)
 V_MAX = 3.0                 # m/s,  Grøntved vd. 2023 (CLAUDE.md bölüm 13)
 A_MAX = 1.0                 # m/s², Grøntved vd. 2023 (CLAUDE.md bölüm 13)
 SETPOINT_RATE_HZ = 10       # PX4 offboard için en az 2 Hz gerekir
@@ -118,18 +126,40 @@ async def fly_to(offboard, telemetry, frame, target_ne, down_m, yaw_deg):
         await asyncio.sleep(dt)
 
 
-async def main():
-    boundary = load_boundary(SCENARIO_PATH)
-    tasks = {task.task_id: task for task in load_tasks(SCENARIO_PATH)}
-    task = tasks[TASK_ID]
-    (sx, sy), (ex, ey) = task.waypoints
+def parse_args():
+    parser = argparse.ArgumentParser(description="CoverageTasks gorevlerini tek IHA ile sirayla ucar.")
+    parser.add_argument("scenario", help="Senaryo dosyasi, ornek: scenarios/AC10_0000.json")
+    parser.add_argument(
+        "--tasks", type=int, nargs="+", required=True,
+        help="Sirayla uculacak gorev numaralari (veri setindeki sira, 1'den baslar)",
+    )
+    return parser.parse_args()
+
+
+async def main(scenario_path, task_ids):
+    boundary = load_boundary(scenario_path)
+    obstacles = load_obstacles(scenario_path)
+    all_tasks = {task.task_id: task for task in load_tasks(scenario_path)}
+    unknown = [t for t in task_ids if t not in all_tasks]
+    if unknown:
+        print(f"HATA: senaryoda olmayan gorev numaralari: {unknown} (1-{len(all_tasks)} arasi olmali)")
+        return
+    selected = [all_tasks[t] for t in task_ids]
     min_x = min(x for x, _ in boundary)
     min_y = min(y for _, y in boundary)
-    print(f"Senaryo: {SCENARIO_PATH.name}, {len(tasks)} gorev")
-    print(
-        f"Secilen gorev {TASK_ID}: ({sx}, {sy}) -> ({ex}, {ey}), "
-        f"uzunluk {math.hypot(ex - sx, ey - sy):.2f} m"
-    )
+
+    print(f"Senaryo: {scenario_path}, {len(all_tasks)} gorev, {len(obstacles)} engel")
+    if obstacles:
+        print(
+            "UYARI: Veri setindeki engeller Gazebo'da fiziksel olarak YOK. "
+            "Bu ucus yalnizca gosterim amaclidir; engelden kacinma yapilmaz."
+        )
+    for task in selected:
+        (sx, sy), (ex, ey) = task.waypoints
+        print(
+            f"  Gorev {task.task_id}: ({sx:.2f}, {sy:.2f}) -> ({ex:.2f}, {ey:.2f}), "
+            f"uzunluk {math.hypot(ex - sx, ey - sy):.2f} m"
+        )
 
     config = Configuration.create_with_component_type(ComponentType.GROUND_STATION)
     async with Mavsdk(config) as mavsdk:
@@ -172,23 +202,27 @@ async def main():
             await run_step("4. Offboard baslat", offboard.start())
             print("  Offboard modu aktif.")
 
-            start_ne = frame.to_ned(sx, sy)
-            end_ne = frame.to_ned(ex, ey)
-            await run_step(
-                f"5. Gorev baslangicina ucus ({sx}, {sy})",
-                fly_to(offboard, telemetry, frame, start_ne, down_m, yaw_deg),
-            )
-            await run_step(
-                f"6. Tarama cizgisi boyunca ucus -> ({ex}, {ey})",
-                fly_to(offboard, telemetry, frame, end_ne, down_m, yaw_deg),
-            )
+            for n, task in enumerate(selected, start=1):
+                (sx, sy), (ex, ey) = task.waypoints
+                prefix = f"5.{n} Gorev {task.task_id} ({n}/{len(selected)})"
+                await run_step(
+                    f"{prefix}: baslangica ucus ({sx:.2f}, {sy:.2f})",
+                    fly_to(offboard, telemetry, frame, frame.to_ned(sx, sy), down_m, yaw_deg),
+                )
+                await run_step(
+                    f"{prefix}: tarama cizgisi -> ({ex:.2f}, {ey:.2f})",
+                    fly_to(offboard, telemetry, frame, frame.to_ned(ex, ey), down_m, yaw_deg),
+                )
+                print(f"  Gorev {task.task_id} tamamlandi.")
 
-            await run_step("7a. Offboard durdur", offboard.stop())
-            await run_step("7b. Inis komutu", action.land())
+            await run_step("6a. Offboard durdur", offboard.stop())
+            await run_step("6b. Inis komutu", action.land())
             print("  Iniliyor...")
-            await run_step("7c. Inis ve disarm", wait_for_disarm(telemetry))
+            await run_step("6c. Inis ve disarm", wait_for_disarm(telemetry))
 
-            print("\nGorev ucusu basariyla tamamlandi.")
+            print(f"\n{len(selected)} gorevlik ucus basariyla tamamlandi.")
+            if obstacles:
+                print("Hatirlatma: engeller Gazebo'da yoktu; ucus yalnizca gosterim amacliydi.")
 
         except (StepFailed, OffboardError) as e:
             print(f"\nHATA: {e}")
@@ -196,4 +230,5 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    args = parse_args()
+    asyncio.run(main(args.scenario, args.tasks))
