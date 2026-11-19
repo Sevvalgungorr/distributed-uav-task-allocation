@@ -266,3 +266,19 @@ Hocanın "görevlerin akademik dayanağı" sorusu için görevleri CoverageTasks
 - Başlangıç senaryosu: `scenarios/h1.json` (13 görev). Asıl deneyler için daha sonra AC300 kullanılacak.
 - Eski 20 bölgelik örnek senaryo (`tasks.py`) silinmeyecek, şimdilik kalacak.
 - Projenin katkısı: makalede olmayan iletişim kaybı, İHA arızası sonrası yeniden atama, lider seçimi ve batarya ile görev devri.
+
+## 13. Doğrulanmış deney parametreleri (Grøntved vd. 2023 tam metninden)
+
+- **Hareket modeli:** v_max = 3 m/s, a_max = 1 m/s², hız rampası modeli (görevler arasında tam duruş).
+- **Puan:** zamana göre indirimli ödül, λ = 0.95. (trajallocpy kodunda 0.99 yazıyor, makale 0.95 kullanıyor.) Ödüller sabit.
+- **Kapasite:** L_t = azami uçuş süresi (saniye).
+  - Ana karşılaştırma: 2 İHA → 1200 s
+  - Ölçeklenebilirlik deneyi: 2 İHA 1500 s, 4 İHA 750 s, 6 İHA 600 s, 8–14 İHA 500 s
+- **Ağ:** tamamen bağlı; ω = 15 (Turner vd. 2017); başlangıç noktası rastgele ve tüm İHA'lar için ortak.
+- **Veri seti:** yalnızca AC300 kullanılmış (10.000 m², 0–15 engel, 35–161 görev).
+- **Merkezi karşılaştırma:** Agarwal & Akella, IEEE RA-L 2022.
+- **Sonuçlar:**
+  - Merkezi yönteme göre %1,9 fark
+  - Nokta görevlere göre %6 iyileşme
+  - En uzun İHA süresi: 2 İHA'da 972 s, 14 İHA'da 229 s
+- **Yazarların gelecek çalışma olarak belirttikleri:** dinamik İHA kayıpları, kesintili haberleşme, gerçekçi simülasyon. Bu projenin katkısı tam olarak bu boşluk.
