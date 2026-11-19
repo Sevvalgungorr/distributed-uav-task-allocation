@@ -193,40 +193,7 @@ MAVSDK proje sanal ortamına kuruldu (`python -m pip install mavsdk`), sürüm *
 
 ## 8. TAM OLARAK NEREDE KALDIK?
 
-Sıradaki işlem: `swarm_sim/connect_uav.py` dosyasını oluşturmak.
-
-İlk bağlantı testi için planlanan kod:
-
-```python
-import asyncio
-from mavsdk import System
-
-
-async def main():
-    drone = System()
-
-    print("IHA'ya baglaniliyor...")
-    await drone.connect(system_address="udp://:14540")
-
-    async for state in drone.core.connection_state():
-        if state.is_connected:
-            print("IHA baglantisi basarili!")
-            break
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
-```
-
-Çalıştırılması planlanan komut:
-
-```bash
-cd ~/suruiha
-source .venv/bin/activate
-python -m swarm_sim.connect_uav
-```
-
-Amaç, Gazebo'daki `x500` İHA'sının PX4 üzerinden MAVSDK'ye bağlanabildiğini doğrulamak. Bağlantı kurulmazsa MAVLink UDP portları ve PX4 yapılandırması kontrol edilmeli.
+Bağlantı testi başarılı (Sistem ID: 1). Çalışan kod: `swarm_sim/connect_uav.py`. MAVSDK 4.x API kullanılıyor (`Mavsdk`, `add_any_connection`, `first_autopilot`, `udpin://0.0.0.0:14540`). Bilinen sorun: program kapanırken 'Bad file descriptor' uyarısı çıkıyor, bağlantıyı etkilemiyor.
 
 ## 9. Bundan sonraki teknik yol haritası
 
