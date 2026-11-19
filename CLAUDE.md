@@ -197,7 +197,7 @@ Bağlantı testi başarılı (Sistem ID: 1). Çalışan kod: `swarm_sim/connect_
 
 ## 9. Bundan sonraki teknik yol haritası
 
-**Aşama 1 — Tek İHA bağlantısı:** PX4 ve Gazebo'yu yeniden başlatmak, MAVSDK bağlantısını test etmek, konum ve sağlık durumunu okumak, kontrollü kalkış ve iniş.
+**Aşama 1 — Tek İHA bağlantısı — TAMAMLANDI (19 Kasım 2026):** MAVSDK bağlantısı (`swarm_sim/connect_uav.py`), sağlık kontrolü ve kontrollü kalkış–bekleme–iniş (`swarm_sim/takeoff_land.py`) simülasyonda başarıyla test edildi. Kalkış irtifası kodda belirlenmedi; PX4'ün varsayılan değeri (2,5 m) `get_takeoff_altitude()` ile okundu.
 
 **Aşama 2 — Çoklu İHA simülasyonu:** Gazebo'da birden fazla x500, her İHA için ayrı PX4 örneği, Python'dan her İHA'yı ayrı kontrol. Önce 2–3 İHA, sonra 5 İHA.
 
@@ -231,6 +231,8 @@ Hocanın "görevlerin akademik dayanağı" sorusu için görevleri CoverageTasks
 - Veri seti: https://github.com/kasperg3/CoverageTasks (MIT lisansı, DOI: 10.5281/zenodo.7763104)
 - Her görev bir tarama çizgisidir (iki nokta). İHA'nın çizgiyi hangi yönde uçacağı da atama sırasında seçilir.
 - Başlangıç senaryosu: `scenarios/h1.json` (13 görev). Asıl deneyler için daha sonra AC300 kullanılacak.
+  - **h1.json'un birimi belirsiz** (Huang 2001 örnek poligonu, alan 7 × 7 birim); yalnızca testler için kullanılacak. Grøntved vd. deneylerde yalnızca AC300 kullanıyor (10.000 m², metre cinsinden).
+  - **h1.json'daki 9. görev sıfır uzunlukta** (`(7,0) → (7,0)`); veri setinin kendisinden geliyor. Yükleyici (`swarm_core/dataset.py`) bu görevi silmiyor; CBBA bunu nokta görev gibi işleyecek.
 - Eski 20 bölgelik örnek senaryo (`tasks.py`) silinmeyecek, şimdilik kalacak.
 - Projenin katkısı: makalede olmayan iletişim kaybı, İHA arızası sonrası yeniden atama, lider seçimi ve batarya ile görev devri.
 

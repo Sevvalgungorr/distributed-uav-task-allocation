@@ -27,6 +27,18 @@ async def run_step(name, coro):
         raise StepFailed(f"'{name}' adımında PX4 komutu reddetti: {e.result.name}")
 
 
+async def leave_offboard_on_ground(action, telemetry):
+    """Önceki bir çalıştırmadan İHA yerde OFFBOARD modunda kalmışsa Hold'a alır.
+
+    Yerdeyken OFFBOARD modunda kalan PX4, setpoint akışı olmadığı için arm etmeyi reddeder.
+    """
+    mode = await telemetry.flight_mode()
+    if mode.name == "OFFBOARD" and not await telemetry.in_air():
+        print("  IHA yerde OFFBOARD modunda kalmis, HOLD moduna aliniyor...")
+        await action.hold()
+    print(f"  Ucus modu: {(await telemetry.flight_mode()).name}")
+
+
 async def wait_for_health(telemetry):
     last = None
     async with aclosing(telemetry.subscribe_health()) as stream:
@@ -43,8 +55,10 @@ async def wait_for_health(telemetry):
                     f"home: {status[2]}, arm edilebilir: {status[3]}"
                 )
                 last = status
-            if health.is_global_position_ok and health.is_home_position_ok:
-                print("  Konum tahmini ve home position hazir.")
+            # is_armable da beklenir: PX4, GCS bağlantısı yeni kurulduğunda sağlık
+            # durumunu birkaç saniye içinde yeniden değerlendirir; erken arm reddedilir.
+            if health.is_global_position_ok and health.is_home_position_ok and health.is_armable:
+                print("  Konum tahmini, home position hazir ve IHA arm edilebilir.")
                 return
 
 
@@ -108,7 +122,8 @@ async def main():
         telemetry = TelemetryAsync(drone)
 
         try:
-            await run_step("2. Saglik kontrolleri", wait_for_health(telemetry))
+            await run_step("2a. Ucus modu kontrolu", leave_offboard_on_ground(action, telemetry))
+            await run_step("2b. Saglik kontrolleri", wait_for_health(telemetry))
 
             takeoff_alt = await run_step(
                 "3a. PX4 varsayilan kalkis irtifasi", action.get_takeoff_altitude()
