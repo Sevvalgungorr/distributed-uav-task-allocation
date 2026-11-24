@@ -45,14 +45,14 @@ from swarm_sim.takeoff_land import (
 
 V_MAX = 3.0                 # m/s,  Grøntved vd. 2023 (CLAUDE.md bölüm 13)
 A_MAX = 1.0                 # m/s², Grøntved vd. 2023 (CLAUDE.md bölüm 13)
-SETPOINT_RATE_HZ = 10       # PX4 offboard için en az 2 Hz gerekir
-
-# Aşağıdakiler uygulama ayarlarıdır, senaryo parametresi değildir:
-ARRIVAL_TOLERANCE_M = 0.3   # Hedefe varmış sayılma mesafesi
-STOP_SPEED_M_S = 0.2        # Bu hızın altında "durdu" kabul edilir
-CAPTURE_RADIUS_M = 0.5      # Bu mesafeden sonra PX4 konum tutmaya geçilir
-ALT_GAIN = 1.0              # İrtifa tutma kazancı (1/s)
-ALT_SPEED_M_S = 0.5         # İrtifa düzeltme hız sınırı
+# TEST AYARLARI (CLAUDE.md bölüm 14, kural 2): Aşağıdaki değerlerin akademik kaynağı yoktur.
+# Uçuşu simülasyonda kararlı yapmak için seçilmiştir; deney parametresi olarak kullanılmaz.
+SETPOINT_RATE_HZ = 10       # Test ayarı. (PX4 offboard için en az 2 Hz gerekir; 10 Hz seçimdir.)
+ARRIVAL_TOLERANCE_M = 0.3   # Test ayarı: hedefe varmış sayılma mesafesi
+STOP_SPEED_M_S = 0.2        # Test ayarı: bu hızın altında "durdu" kabul edilir
+CAPTURE_RADIUS_M = 0.5      # Test ayarı: bu mesafeden sonra PX4 konum tutmaya geçilir
+ALT_GAIN = 1.0              # Test ayarı: irtifa tutma kazancı (1/s)
+ALT_SPEED_M_S = 0.5         # Test ayarı: irtifa düzeltme hız sınırı
 
 
 class LocalFrame:

@@ -5,6 +5,12 @@
     -i 1 -> x500_1, Gazebo (0, 3), MAVSDK portu 14541, Sistem ID 2
 PX4 portları: px4-rc.mavlink (14540 + örnek_no), Sistem ID: rcS (örnek_no + 1).
 
+TEST AYARI (CLAUDE.md bölüm 14, kural 2): İHA'lar arası 3 m başlangıç mesafesi.
+Gazebo konumları PX4 başlatma komutunda PX4_GZ_MODEL_POSE ile verilir ("0,0" ve "0,3").
+Grøntved vd. (2023) bütün İHA'ları ortak bir başlangıç noktasından (depot) başlatır;
+Gazebo'da iki model aynı noktada duramadığı için 3 m seçilmiştir. Akademik kaynağı yoktur,
+deney parametresi değildir.
+
 Her İHA için ayrı bir Mavsdk nesnesi ve ayrı bağlantı kullanılır.
 Adımlar aşama aşama ilerler: bir aşama iki İHA için de bitmeden sonrakine geçilmez.
 Bir İHA'da bir adım başarısız olursa diğerinin o aşamadaki işi iptal edilir ve
