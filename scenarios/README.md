@@ -10,7 +10,7 @@
 - Veri seti DOI: [10.5281/zenodo.7763104](https://doi.org/10.5281/zenodo.7763104)
 
 **Veri setini tanıtan makale:**
-Grøntved, Schultz, Christensen,
+Grøntved, Lundquist, Christensen,
 "Decentralized Multi-UAV Trajectory Task Allocation in Search and Rescue Applications",
 *International Conference on Advanced Robotics (ICAR)*, 2023.
 DOI: [10.1109/icar58858.2023.10406912](https://doi.org/10.1109/icar58858.2023.10406912)

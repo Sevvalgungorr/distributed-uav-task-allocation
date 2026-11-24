@@ -229,7 +229,7 @@ Hocanın akademik görev tanımlarıyla ilgili beklentisi sonraki aşamalarda mu
 ## 12. Görev veri seti kararı (18 Kasım 2026)
 
 Hocanın "görevlerin akademik dayanağı" sorusu için görevleri CoverageTasks veri setinden alıyoruz:
-- Kaynak: Grøntved, Schultz, Christensen, "Decentralized Multi-UAV Trajectory Task Allocation in Search and Rescue Applications", ICAR 2023. DOI: 10.1109/icar58858.2023.10406912
+- Kaynak: Grøntved, Lundquist, Christensen, "Decentralized Multi-UAV Trajectory Task Allocation in Search and Rescue Applications", ICAR 2023. DOI: 10.1109/icar58858.2023.10406912
 - Veri seti: https://github.com/kasperg3/CoverageTasks (MIT lisansı, DOI: 10.5281/zenodo.7763104)
 - Her görev bir tarama çizgisidir (iki nokta). İHA'nın çizgiyi hangi yönde uçacağı da atama sırasında seçilir.
 - Başlangıç senaryosu: `scenarios/h1.json` (13 görev). Asıl deneyler için daha sonra AC300 kullanılacak.
