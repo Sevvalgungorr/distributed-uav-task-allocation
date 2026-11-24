@@ -342,7 +342,7 @@ Her commit'ten önce `pytest`; uçuşa dokunan değişikliklerden sonra simülas
 
 # CBBA — Dağıtık görev atama
 
-> Durum: **TASLAK — K13 ve K14 kararları bekleniyor.** Kod yazılmadı.
+> Durum: **K1 (Choi 2009 PDF'iyle doğrulama) ve K7 (paket kaybı oranlarının kaynağı) dışında kararlar alındı.** CBBA kodu henüz yazılmadı.
 
 **Kaynaklar ve kısaltmalar:**
 - **[G §V-A], [G Eq. 7]** = Grøntved, Lundquist, Christensen, "Decentralized Multi-UAV Trajectory Task Allocation in Search and Rescue Applications", ICAR 2023, DOI 10.1109/icar58858.2023.10406912. Yazarların kabul edilmiş son taslağı, 8 sayfa; `~/makaleler/Grontved2023.pdf` (repoda değil).
@@ -424,8 +424,8 @@ S_i^{p_i} = Σ_{j ∈ p_i}  λ^{τ_ij(p_i)} · c̄_j                            
 | **Engel ve sınır ölçeği** | Yol planlamasında engeller merkezlerine göre **%95'e küçültülüyor**, alan sınırı **%101'e büyütülüyor**. [T23 main.py:71-80] Şeritler engel kenarlarında olduğu için (A0.2) bu gerekli. | K13 |
 | **Rampa nerede uygulanıyor** | Her ayak ayrı: depot → ilk giriş, her geçiş (çıkış → sonraki giriş), her şeridin kendisi (giriş → çıkış), son çıkış → depot. [T23 CBBA.py:107-118] | K2 ✅ |
 | **`τ_ij` neyi içeriyor** | Puan hesabında **yalnızca geçiş süreleri** toplanıyor; şeritlerin kendi uçuş süreleri `τ`'ya eklenmiyor. [T23 CBBA.py:181-211] | K2 (kod esas) |
-| **Puanda depot'a dönüş** | Yeni görevli yolun puanına depot'a dönüş için bir terim daha ekleniyor [T23 CBBA.py:213-218], ama mevcut yolun puanında bu terim yok [T23 CBBA.py:159-167]. Tutarsızlık. | K14 |
-| **Kapasite kontrolü** | Görev **eklenmeden önce** kontrol ediliyor, bu yüzden son eklenen görev kapasiteyi aşabiliyor. [T23 CBBA.py:253] Yazarların sonuçlarında görülüyor: 2 İHA × 1500 s dosyasında en uzun rota 1507,6 s. | K14 |
+| **Puanda depot'a dönüş** | Yeni görevli yolun puanına depot'a dönüş için bir terim daha ekleniyor [T23 CBBA.py:213-218], mevcut yolun puanında ise bu terim yer almıyor [T23 CBBA.py:159-167]. Marjinal puan bu iki hesabın farkı olduğu için terim yalnızca bir tarafta kalıyor. | K14 |
+| **Kapasite kontrolü** | Kapasite, görev **eklenmeden önce** kontrol ediliyor [T23 CBBA.py:253]; son eklenen görevle rota kapasiteyi biraz geçebiliyor. Sonuç dosyasında gözlemlenen: 2 İHA × 1500 s dosyasında en uzun rota 1507,6 s. | K14 |
 
 **Nokta görev karşılaştırması** (makaledeki %6 sonucu):
 - Makale: "giriş noktasına Öklid uzaklığı". [G §V-A]
@@ -442,26 +442,12 @@ S_i^{p_i} = Σ_{j ∈ p_i}  λ^{τ_ij(p_i)} · c̄_j                            
 | `d_a` | 9 m | [G Eq. 7] türetilmiş | |
 | `c̄_j` | 1 | [G §IV-A] "sabit"; [T23 Task.py:13] | K3 ✅ |
 | `ω` (azami atama çarpanı) | 15 | [G §V] → Turner 2017; [T23 CBBA.py:72] `removal_threshold = 15` | Tanım koddan (K5 ✅) |
-| Kapasite (D1) | 2 İHA × **1200 s** | [G §V, §V-A, Fig. 2–3] | ⚠️ Yazarların sonuç dosyalarıyla uyuşmuyor (C4.1) |
-| Kapasite (ölçeklenebilirlik) | 2: 1500 · 4: 750 · 6: 600 · 8/10/12/14: 500 s | [G Fig. 4–5] | ⚠️ İHA sayıları 2'şer adımla. Koddaki değerler farklı (C4.1) |
+| Kapasite (D1) | 2 İHA × **1200 s** | [G §V, §V-A, Fig. 2–3] | ⚠️ Yazarların sonuç dosyalarında farklı değerler gözlemlendi (C10) |
+| Kapasite (ölçeklenebilirlik) | 2: 1500 · 4: 750 · 6: 600 · 8/10/12/14: 500 s | [G Fig. 4–5] | ⚠️ İHA sayıları 2'şer adımla. Deney betiğinde farklı değerler gözlemlendi (C10) |
 | Ağ | Tam bağlı | [G §V]; [T23 Experiment.py:27] | |
 | Depot | Rastgele, ortak | [G §V-A]; [T23 main.py:83-84, CoverageProblem.py:69-74] | K4 ✅ |
 | Veri seti | AC300: 300 ortam, 10.000 m², 0–15 engel, 35–161 görev | [G §V] | |
 | Sensör | "3 m² field-of-view" | [G §V] | CoverageTasks README'si "3 m sweep width" diyor |
-
-### C4.1 Makale ile yazarların sonuç dosyaları arasındaki farklar
-
-Yazarların sonuç dosyalarını `benchmarks/AC300/*.csv` [T23] ve deney betiğini [T23 run_experiments.sh] kendim okuyup topladım.
-
-| Makale | Yazarların dosyaları | Yorum |
-|---|---|---|
-| D1: 2 İHA × **1200 s** ile toplam **554.920 s** [G §V] | Bu sayı (554.921 s) `2robots_**1500**capacity_AC300.csv` dosyasının toplamı. 1200 s'lik yörünge sonuç dosyası **yok**. | Makaledeki yörünge sonucu büyük olasılıkla 1500 s kapasiteyle üretilmiş. |
-| Merkezi yöntem **544.592 s** [G §V] | `agarwal_AC300_1200_Capacity.csv` toplamı 544.592 s, ama **320 ortam** (AC0–AC15 × 20). Yörünge dosyası **300 ortam**. | %1,9 farkı aynı ortam kümesi üzerinden hesaplanmamış olabilir. |
-| 6 İHA × **600 s** [G Fig. 4] | `6robots_**500**capacity` dosyası ve betik `--capacity=500` | Farklı |
-| 10/12/14 İHA × **500 s** [G Fig. 4] | Betik `--capacity=**400**` ile çalıştırıp `500capacity` adıyla kaydediyor [T23 run_experiments.sh:35-37] | Farklı. 10 ve 12 İHA dosyaları eksik (177 ve 162 / 300 ortam). |
-| En uzun İHA süresi ortalaması: 2 İHA **972 s**, 14 İHA **229 s** [G §V-A] | Dosyalardan hesaplanan ortalama `maxRouteCost`: 2 İHA **1059,8 s**, 14 İHA **259,9 s** | **Uyuşmuyor.** Grafikte farklı bir ölçüt (ör. depot'a dönüş hariç) kullanılmış olabilir; doğrulanamadı. |
-
-**Sonuç:** Kullanıcı kararı gereği kapasiteler **makale metnindeki** gibi kalır (D1: 1200 s; ölçeklenebilirlik: 1500/750/600/500 s). Ek olarak D1'i **1500 s** ile de çalıştırmayı öneriyorum (K15). Böylece hangi koşulun 554.920 s'yi ürettiği gösterilebilir. Merkezi karşılaştırma toplam sayı yerine **ortam ortam**, iki dosyada da bulunan 300 ortam üzerinden yapılır (Agarwal dosyasında ortam başına `Sum of Costs of Routes` var).
 
 ## C5. Aşamalar
 
@@ -469,7 +455,7 @@ Yazarların sonuç dosyalarını `benchmarks/AC300/*.csv` [T23] ve deney betiği
 |---|---|---|
 | **A1** CBBA çekirdeği | `swarm_core`: rampa, görünürlük grafiğiyle mesafe (K13), puan, yönlü demet, 17 kurallı uzlaşma, senkron ağ simülasyonu | Çakışmasız atama; `swarm_core` Gazebo/MAVSDK/arayüzden bağımsız |
 | **A2** h1 ile birim testler | Eq. 7 değerleri, yön seçimi, eşit teklif (küçük kimlik kazanır), demet kesme (`n̄`), `ω` eşiği, kapasite, sıfır uzunluklu görev, DMG kontrolü, yakınsama sınırı | `pytest` geçiyor (h1 birimsiz; yalnızca mantık testi) |
-| **A3** AC300'de D1–D3 | Makale ve yazarların dosyalarıyla ortam ortam karşılaştırma | C4.1'deki tabloların bizim sonuçlarımızla dolu hali |
+| **A3** AC300'de D1–D3 | Hem makale metnindeki değerlerle hem yazarların sonuç dosyalarından hesaplanan değerlerle karşılaştırma (C10) | C10'daki tablonun bizim sonuçlarımızla dolu hali |
 | **A4** Enerji modeli | Zeng vd. 2019 güç modeli; Rodrigues vd. 2021 verisiyle kontrol | **Sınırlılık:** Rodrigues verisindeki araç x500 değil (kullanıcı notu); model adı ve özellikleri Rodrigues 2021'den doğrulanacak. İki kaynak henüz okunmadı. |
 | **A5** Dayanıklılık | Paket kaybı (D4), İHA arızası ve yeniden atama, lider kaybı (D5) | Makalede gelecek çalışma olarak geçiyor [G §VI] |
 | **A6** Gazebo | CBBA → A0 arayüzü (`source: "cbba"`, `reversed`) → uçuş (D6) | 5 İHA (WSL yetmezse 2 veya 4) |
@@ -508,13 +494,13 @@ A0 harita / Gazebo işaretçileri      → aynı kod; panelde "CBBA"
 **Alınan kararlar** (kullanıcı, 24 Kasım 2026):
 1. **Python deneyleri (D1–D5)** makaledeki İHA sayıları ve kapasitelerle yapılır. **Gerekçe:** D1 makaleyle karşılaştırmadır.
    - D1: 2 İHA × 1200 s.
-   - Ölçeklenebilirlik: 2/4/6/8/10/12/14 İHA × 1500/750/600/500 s [G §V, Fig. 4]. (Kodla farklar C4.1'de.)
+   - Ölçeklenebilirlik: 2/4/6/8/10/12/14 İHA × 1500/750/600/500 s [G §V, Fig. 4]. (Gözlemlenen farklar: C10.)
 2. **D6 (Gazebo):** 5 İHA × 600 s. **MAKALEDE YOK – temkinli seçim:** 5 İHA için kapasite yok; 4 İHA (750 s) ile 6 İHA (600 s) arasından daha kısıtlayıcı olan seçildi. WSL yetmezse 2 veya 4 İHA ile yapılır ve sınırlılık olarak yazılır.
 3. **λ = 0,95.**
 
 | Deney | Soru | Koşullar | Makaledeki karşılığı |
 |---|---|---|---|
-| D1 | Bizim uygulamamız makaledeki sonuca ulaşıyor mu? | 2 İHA × 1200 s (+ K15: 1500 s), 300 ortam; yörünge ve nokta puanlama; merkezi ile ortam ortam | 554.920 s; %6; %1,9 |
+| D1 | Bizim uygulamamız makaledeki sonuca ulaşıyor mu? | 2 İHA × 1200 s (+ K15: 1500 s), 300 ortam; yörünge ve nokta puanlama; `paper_compat` modu | İki ayrı karşılaştırma (C10): (1) makale metnindeki değerler: 554.920 s, %6, %1,9; (2) yazarların sonuç dosyalarından hesaplanan değerler, ortam ortam |
 | D2 | Ölçeklenebilirlik | 2–14 İHA, 2'şer adım | 972 → 229 s [G Fig. 4] |
 | D3 | Yakınsama | D2 ile aynı | [G Fig. 5] |
 | D4 | Paket kaybı | D1 koşulları + K7 | Makalede yok (katkı) |
@@ -531,15 +517,15 @@ A0 harita / Gazebo işaretçileri      → aynı kod; panelde "CBBA"
 | K4 | Depot | ✅ Kod esas | Sınır kutusunda düzgün dağılım; alan dışı ve engel içi noktalar reddediliyor [T23 CoverageProblem.py:69-74]. Ortam başına 1 depot, bütün İHA'lar için ortak [T23 main.py:83-84]. Tohum: bütün çalışma için tek tohum, `random.seed(1352323)` [T23 main.py:126-128]; ortamlar sırayla aynı rastgele diziden. **Önerimden farkı:** ben ortam başına ayrı tohum önermiştim. D1 kodu taklit eder. 5 tohumlu duyarlılık analizi ek olarak kalır (test ayarı). |
 | K5 | `ω = 15` tanımı | ✅ Koddan | Bir İHA bir görevi demetinden ilk kaybedilen görev olarak `ω`'dan fazla kez kaybederse, o görev için artık teklif vermez [T23 CBBA.py:72, 238, 421-423]. Turner 2017 gerekmedi; tanım Turner'la ayrıca karşılaştırılmadı. **Önerimden farklı:** ben `ω`'yu kullanmamayı önermiştim. |
 | K6 | Senkron/asenkron, iterasyon | ✅ | Senkron: her turda bütün İHA'lar demet oluşturur → mesajlar toplanır → bütün İHA'lar uzlaşır. 1 tur = 1 iterasyon. Bütün İHA'lar o turda hiç görev kaybetmediyse yakınsamış sayılır [T23 Experiment.py:102-157, CBBA.py:431-436]. **Önerimle aynı.** |
-| K7 | Paket kaybı oranları | ✅ | **%0, %10, %30.** Kaynak: kullanıcı notu — 10 ve 30 bir event-triggered CBBA çalışmasından; 0 temel durum. ⚠️ Çalışmanın künyesi plana eklenecek. %20 ve %50: **isteğe bağlı ek duyarlılık analizi, kaynak yok.** Oran başına 10 tohum: **test ayarı.** |
+| K7 | Paket kaybı oranları | ⏳ **Kaynak doğrulanamadı — karar bekliyor** | Önerilen kaynak okundu: Sao, Ho, Bhore, Sujit, "Event Driven CBBA with Reduced Communication", arXiv:2509.06481 (2025), `~/makaleler/Sao2025_EventDrivenCBBA.pdf`. **Bu çalışmada paket kaybı deneyi yok; %10 ve %30 geçmiyor.** Paket kaybı yalnızca motivasyon olarak (§III, eşzamanlı yayında tıkanıklık → kayıp) ve gelecek çalışma olarak (§V, "bit errors and packet loss", NS-3) anılıyor. Deney düzeni (§IV): 100 m × 100 m alan, 10 m komşuluk eşiği (bağlı grafik), 5–50 İHA, demet boyu K = 1–8, yapılandırma başına 100 Monte Carlo; ölçüt: yayın (broadcast) sayısı (%52'ye kadar azalma). Şimdilik: %0 temel durum; %10, %30, %20, %50 **kaynak yok**. Oran başına 10 tohum: **test ayarı.** |
 | K8 | Lider | ✅ | Yalnızca izleme/raporlama; atama kararı vermez. Kayıpta en küçük kimlikli canlı İHA lider olur; D5'te atamanın etkilenmediği gösterilir. |
 | K9 | Yön bilgisi | ✅ | `reversed` alanı A0.0.5'e eklendi. |
 | K10 | DMG | ✅ | A2'de deneysel test; bozuluyorsa sınırlılık. |
 | K11 | Sıfır uzunluklu görev | ✅ | Nokta görev gibi. |
 | K12 | Depot'a dönüş kapasitede mi | ✅ Kod esas | **Dahil** [T23 CBBA.py:116-117]; raporlanan rota maliyetlerinde de dahil [T23 Experiment.py:43]. **Önerimden farklı** (ben dahil değil demiştim). |
-| **K13** | Mesafe nasıl hesaplanacak | ⏳ **Karar gerekli** | **Öneri:** Engellerden kaçınan en kısa yol, yazarlar gibi `extremitypathfinder` ile (pip; lisansı kurulumda kontrol edilecek). Engel %95 ve sınır %101 ölçeği de taklit edilir. **Gerekçe:** D1 karşılaştırması aynı maliyet modelini gerektirir. Alternatif: shapely + networkx ile kendi görünürlük grafiğimiz (daha çok iş, aynı sonucu verdiği ayrıca test edilmeli). |
-| **K14** | Koddaki makaleden farklı/tutarsız davranışlar: (a) yön yalnızca öncekine göre ve başa eklemede yok; (b) puanda depot dönüşü tutarsız; (c) kapasite eklemeden önce kontrol (aşılabiliyor) | ⏳ **Karar gerekli** | **Öneri:** İki mod. **`paper_compat`** (varsayılan, D1–D3): T23'ü olduğu gibi taklit eder; makale sonuçlarıyla karşılaştırma bununla. **`corrected`:** Eq. 8'deki gibi her iki yön ve her yer, tutarlı puan, kapasite aşılmaz; D4–D6'da kullanılır ve farkı ayrıca raporlanır. **Gerekçe:** Makalenin sayıları bu koddan çıktı. Ama projemizin kendi deneyleri makalenin tanımına uygun bir algoritmayla yapılmalı. |
-| **K15** | D1 kapasitesi | ⏳ **Karar gerekli** | **Öneri:** D1'i hem 1200 s (makale metni) hem 1500 s (yazarların sonuç dosyası) ile çalıştırmak; ana tablo 1200 s. **Gerekçe:** C4.1'deki uyuşmazlığı açıkça göstermek. |
+| **K13** | Mesafe nasıl hesaplanacak | ✅ **Onaylandı** | Engellerden kaçınan en kısa yol, yazarlar gibi `extremitypathfinder` ile (pip; lisansı kurulumda kontrol edilecek). Engel %95 ve sınır %101 ölçeği de taklit edilir. **Gerekçe:** D1 karşılaştırması aynı maliyet modelini gerektirir. Alternatif: shapely + networkx ile kendi görünürlük grafiğimiz (daha çok iş, aynı sonucu verdiği ayrıca test edilmeli). |
+| **K14** | Kodun makale metninden ayrıldığı noktalar: (a) yön yalnızca önceki göreve göre seçiliyor, başa eklemede seçilmiyor; (b) depot dönüş terimi puan hesabının yalnızca bir tarafında; (c) kapasite eklemeden önce kontrol ediliyor | ✅ **Onaylandı: iki mod** |  **`paper_compat`** (D1–D3): T23'ün davranışını olduğu gibi uygular; makale ve sonuç dosyalarıyla karşılaştırma bununla yapılır. **`corrected`** (D4–D6): makale metnine (Eq. 8) göre her iki yön ve her ekleme yeri, iki puan hesabında aynı terimler, kapasite aşılmaz; iki mod arasındaki fark ayrıca raporlanır. **Gerekçe:** Makalenin yayımlanan sayıları T23 ile üretildi; projenin kendi deneyleri makale metnindeki tanıma uygun bir uygulamayla yapılmalı. |
+| **K15** | D1 kapasitesi | ✅ **Onaylandı** | Ana tablo **1200 s** (makale metni); ek olarak **1500 s** (sonuç dosyası). **Gerekçe:** C10'da gözlemlenen farkı açıkça göstermek. |
 
 ## C9. Kaynak notları
 
@@ -547,7 +533,28 @@ A0 harita / Gazebo işaretçileri      → aynı kod; panelde "CBBA"
 - Elimizdeki makale yazarların kabul edilmiş son taslağı (SDU Research Portal). Bölüm ve denklem numaraları buna göre.
 - trajallocpy klonu: `~/makaleler/trajallocpy/` (güncel sürüm) ve `~/makaleler/trajallocpy_2023/` (`git worktree`, commit `13b7bb3`). İkisi de repo dışında; yalnızca okumak için.
 - **Eksik PDF'ler:**
-  - Choi 2009: MIT DSpace 429 hatası verdi; kullanıcı tarayıcıdan indirip `~/makaleler/Choi2009.pdf` olarak koyacak.
+  - Choi 2009: MIT DSpace 429 hatası verdi; kullanıcı tarayıcıdan İndirilenler'e indirecek, `~/makaleler/Choi2009.pdf` olarak kopyalanıp K1 doğrulanacak.
   - Turner 2017: K5 koddan çözüldüğü için şimdilik gerekmiyor.
   - Zeng 2019 ve Rodrigues 2021: A4'ten önce gerekli.
-  - Event-triggered CBBA çalışmasının künyesi: K7 için gerekli.
+  - Sao vd. 2025 (arXiv:2509.06481) okundu, `~/makaleler/Sao2025_EventDrivenCBBA.pdf`; paket kaybı oranı içermiyor (K7). K7 için başka bir kaynak gerekli.
+
+## C10. Gözlemlenen farklar: makale metni ve yazarların sonuç dosyaları
+
+Yazarların sonuç dosyaları (`benchmarks/AC300/*.csv`) ve deney betiği (`run_experiments.sh`) T23 sürümünde yer alıyor. Dosyaları okuyup topladım ve makale metnindeki değerlerle karşılaştırdım. Aşağıdaki tablo yalnızca **gözlemleri** içerir; farkların nedeni doğrulanmadı. Grafikler ayrı bir işlemle, farklı bir ölçütle ya da bu depoda bulunmayan dosyalarla üretilmiş olabilir.
+
+| Makale metni | Sonuç dosyası / betik | Gözlem |
+|---|---|---|
+| D1: 2 İHA × **1200 s**, toplam **554.920 s** [G §V] | `2robots_1500capacity_AC300.csv` toplamı **554.921 s** (300 ortam). Bu depoda 1200 s'lik bir yörünge sonuç dosyası yok. | Makaledeki toplam, 1500 s dosyasının toplamıyla sayısal olarak aynı. |
+| Merkezi yöntem **544.592 s** [G §V] | `agarwal_AC300_1200_Capacity.csv` toplamı **544.592 s**, **320 ortam** (AC0–AC15, her birinden 20). | Yörünge dosyası 300 ortam içeriyor; iki toplam farklı sayıda ortamdan. |
+| 6 İHA × **600 s** [G Fig. 4–5 açıklaması] | Dosya `6robots_500capacity`; betikte `--capacity=500` [T23 run_experiments.sh:39] | Kapasite değeri farklı. |
+| 8/10/12/14 İHA × **500 s** [G Fig. 4–5 açıklaması] | 8 İHA: `--capacity=500`. 10/12/14 İHA: `--capacity=400`, dosya adları `500capacity` [T23 run_experiments.sh:35-38] | 10/12/14 için komut satırı değeri ile dosya adı farklı. 10 ve 12 İHA dosyaları 177 ve 162 ortam içeriyor (300 değil). |
+| Ortalama en uzun İHA süresi: 2 İHA **972 s**, 14 İHA **229 s** [G §V-A] | Dosyalardan hesaplanan ortalama `maxRouteCost`: 2 İHA **1059,8 s**, 14 İHA **259,9 s** | Değerler farklı; grafikte kullanılan ölçüt dosyalardan belirlenemedi. |
+
+**D1'de iki ayrı karşılaştırma yapılacak** (K15 ile birlikte):
+1. **Makale metnindeki değerlerle:** 554.920 s, merkezi 544.592 s (%1,9), nokta puanlamaya göre %6, 972/229 s.
+2. **Sonuç dosyalarından hesaplanan değerlerle, ortam ortam:**
+   - Bizim 1200 s ve 1500 s sonuçlarımız, yazarların `2robots_1500capacity` dosyasıyla.
+   - Merkezi yöntem, `agarwal_AC300_1200_Capacity.csv` içindeki ortam başına `Sum of Costs of Routes` değerleriyle; yalnızca iki dosyada da bulunan ortamlar üzerinden.
+   - Ölçeklenebilirlik (D2), dosyalardaki kapasite değerleriyle de ayrıca çalıştırılıp karşılaştırılır.
+
+Raporda iki karşılaştırma ayrı tablolarda verilir ve bu bölümdeki gözlemler sınırlılık olarak belirtilir.
