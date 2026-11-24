@@ -112,6 +112,11 @@ Arayüz iki mesaj türünden oluşur. Her ikisi de JSON'dur ve yerel UDP ile (`1
 ```
 
 - `assignment`: İHA kimliği (= PX4 Sistem ID) → görev kimliklerinin **uçuş sırasıyla** listesi (`{iha_id: [görev_id sırası]}`). Görev kimlikleri `swarm_core/dataset.py`'deki numaralardır (veri setindeki sıra, 1'den başlar).
+- `reversed` (**isteğe bağlı**, K9 kararı): İHA kimliği → `assignment` ile aynı uzunlukta bool listesi. `true` olan görev veri setindeki yönün **tersine** uçulur (`u1 → u0`). Alan yoksa bütün görevler veri setindeki yönde uçulur (`false`). Manuel atamada (`fly_task.py`) şimdilik hep `false`; CBBA her görevin yönünü seçtiği için doldurur (CBBA bölümü, C1). Harita planlanan rotayı ve şeridin giriş ucunu bu alana göre çizer.
+
+  ```json
+  "reversed": { "1": [false, true, false, false], "2": [] }
+  ```
 - `source`: atamanın kaynağı. Yalnızca iki değer alır:
   - `"manual"` → ekranda **"Manuel atama"**
   - `"cbba"` → ekranda **"CBBA"**
@@ -337,132 +342,137 @@ Her commit'ten önce `pytest`; uçuşa dokunan değişikliklerden sonra simülas
 
 # CBBA — Dağıtık görev atama
 
-> Durum: **TASLAK — onay bekliyor.** Kod yazılmadı.
-> **Birincil kaynak:** Grøntved, Lundquist, Christensen, "Decentralized Multi-UAV Trajectory Task Allocation in Search and Rescue Applications", ICAR 2023, DOI 10.1109/icar58858.2023.10406912 (yazarların kabul edilmiş son taslağı, 8 sayfa; `~/makaleler/Grontved2023.pdf`, repoda değil). Aşağıda **[G §V-A]** = bu makalenin V-A bölümü, **[G Eq. 7]** = denklem 7.
-> **İkincil kaynak:** Choi, Brunet, How, "Consensus-Based Decentralized Auctions for Robust Task Allocation", IEEE T-RO 25(4), 2009 = makalenin [13] numaralı kaynağı. **Bu PDF henüz elimizde değil.** Choi 2009'a dayanan maddeler yalnızca Grøntved'in Choi 2009'u nasıl özetlediğine göre yazıldı ve **[Choi 2009, G'den aktarma]** diye işaretlendi; A1'den önce asıl metinden doğrulanmalı.
-> İşaretler: **MAKALEDE YOK – karar gerekli** = Grøntved 2023'te bulunamadı, tahmin edilmedi; her birine öneri ve gerekçe yazıldı (C8).
+> Durum: **TASLAK — K13 ve K14 kararları bekleniyor.** Kod yazılmadı.
+
+**Kaynaklar ve kısaltmalar:**
+- **[G §V-A], [G Eq. 7]** = Grøntved, Lundquist, Christensen, "Decentralized Multi-UAV Trajectory Task Allocation in Search and Rescue Applications", ICAR 2023, DOI 10.1109/icar58858.2023.10406912. Yazarların kabul edilmiş son taslağı, 8 sayfa; `~/makaleler/Grontved2023.pdf` (repoda değil).
+- **[T23 dosya:satır]** = yazarların açık kaynak uygulaması **trajallocpy**, makale dönemi sürümü: commit `13b7bb3` (4 Temmuz 2023, "tag"). Bu commit makaledeki Fig. 3, 4 ve 5'in dosyalarını ekliyor. `~/makaleler/trajallocpy_2023/` (salt okunur kopya, repoda değil).
+- **[T-HEAD dosya:satır]** = trajallocpy güncel sürüm, commit `d3932cf` (16 Mayıs 2026). Son commit'te "Fix CBBA correctness, add hard time windows" yazıyor, yani algoritma makaleden sonra değişmiş. **Bu yüzden referans olarak T23 kullanılır**; T-HEAD yalnızca karşılaştırma için anılır.
+- **[Choi 2009]** = Choi, Brunet, How, IEEE T-RO 25(4), 2009 (= makalenin [13] numaralı kaynağı). ⚠️ **PDF indirilemedi:** MIT DSpace hem sayfada hem dosya adresinde "HTTP 429 Too Many Requests" verdi. Choi'ye dayanan maddeler şimdilik Grøntved'in özetine ve T23'teki uygulamaya göre yazıldı ("Choi 2009 → G/T23 üzerinden").
+- **Etiketler:** "MAKALEDE YOK" = makalede bulunamadı. Kodda bulunduysa kaynak T23 gösterilir; bulunamadıysa "karar gerekli" yazılır.
 
 ## C1. Problem tanımı
 
-- Arama alanı, engelleri de içeren bir poligondur. Bu alan önceden **doğru parçalarına (tarama şeritlerine)** bölünmüştür; alanı taramak için her şerit bir İHA tarafından bir kez uçulmalıdır. [G §IV]
-- Her İHA'ya birden çok şerit verilir. Bu yüzden problem çok-atamalı (multi-assignment) bir görev atama problemidir. [G §IV]
-- **Görev = iki uçlu tarama şeridi:** `j ≜ {u0, u1}`, yani bir giriş ve bir çıkış noktası. [G Eq. 4]
-  - Nokta görevden farkı: görev bitince İHA başladığı yerde değil, diğer uçta olur. Bu yüzden görevler arası maliyet hem giriş hem çıkış noktasına bağlıdır. [G §IV]
-  - `u0 = u1` özel durumu makalede açıkça anılıyor. h1.json'daki 9. görev (`(7,0) → (7,0)`) bu durumdur ve nokta görev gibi işlenir. [G §IV]
-- **Yön seçimi:** Her şerit iki yönde uçulabilir. İHA bir şeridi demetine (bundle) eklerken iki yönü de dener ve puanı en çok artıran yönü seçer. [G §IV, Eq. 8]
-  - Yön bilgisi ve yol sırası **diğer İHA'lara gönderilmez**; yalnızca kimin hangi görevi kazandığı paylaşılır. Böylece iletişim yükü orijinal CBBA'dan artmaz. [G §IV-A]
-- **Amaç:** kurtulanları olabildiğince çabuk bulmak, yani tarama süresini en aza indirmek. [G §IV] Bu, zamana göre indirimli ödülün toplamını en büyüklemek olarak modellenir. [G Eq. 6]
-- **Kapasite:** `L_t` bu makalede **azami uçuş süresidir (saniye)**. Bir İHA'nın yol maliyetlerinin toplamı bu değeri aşamaz. [G §V]
-  - ⚠️ Orijinal CBBA'da `L_t` bir İHA'nın alabileceği **görev sayısı**dır. [G §III, Choi 2009 G'den aktarma] Grøntved aynı sembolü süre bütçesi olarak kullanıyor. Uygulamada bu ikisi karıştırılmayacak; kodda `capacity_s` adı kullanılacak.
-- **Başlangıç noktası (depot):** Her problemde rastgele seçilir ve bütün İHA'lar için ortaktır. [G §V-A] Rastgeleliğin nasıl yapıldığı yazmıyor → **MAKALEDE YOK – karar gerekli** (K4).
+- Arama alanı, engelleri de içeren bir poligondur ve önceden **tarama şeritlerine (doğru parçaları)** bölünmüştür. Alanı taramak için her şerit bir İHA tarafından bir kez uçulmalıdır. Her İHA'ya birden çok şerit verildiği için problem çok-atamalıdır (multi-assignment). [G §IV]
+- **Görev = iki uçlu tarama şeridi:** `j ≜ {u0, u1}` (giriş ve çıkış noktası). [G Eq. 4] Kodda `TrajectoryTask(start, end, trajectory)`. [T23 Task.py:8-23]
+  - Nokta görevden farkı: görev bitince İHA diğer uçtadır. Bu yüzden görevler arası maliyet hem giriş hem çıkış noktasına bağlıdır. [G §IV]
+  - `u0 = u1` özel durumu makalede anılıyor [G §IV]. h1.json'daki 9. görev buna örnek; nokta görev gibi işlenir (K11).
+- **Yön seçimi:** Her şerit iki yönde uçulabilir. İHA, demetine şerit eklerken puanı en çok artıran yönü seçer. [G §IV-A, Eq. 8] Kodda görev yerel kopyada ters çevrilir. [T23 CBBA.py:264-266, Task.py:19-23]
+  - Yön ve yol sırası diğer İHA'lara **gönderilmez**; yalnızca kazanan teklifler, kazanan İHA'lar ve zaman damgaları gönderilir. [G §IV-A; T23 CBBA.py:101-102]
+- **Amaç:** tarama süresini en aza indirmek [G §IV]. Bu, zamana göre indirimli ödülün toplamını en büyüklemek olarak modellenir. [G Eq. 6]
+- **Kapasite `L_t`** = azami uçuş süresi (saniye). [G §V] ⚠️ Orijinal CBBA'da `L_t` görev sayısıdır [G §III]. Kodda bu iki anlam karışmasın diye `capacity_s` adı kullanılacak.
+  - **Kapasiteye neler girer:** depot'tan ilk göreve gidiş + görevler arası geçişler + her şeridin kendi uçuşu + **depot'a dönüş**. [T23 CBBA.py:107-118] Makale yalnızca "yol maliyetlerinin toplamı aşılamaz" diyor. [G §V]
+- **Depot:** Her problemde rastgele seçilir ve bütün İHA'lar için ortaktır. [G §V-A] Nasıl seçildiği kodda: K4.
 
 ## C2. CBBA'nın iki aşaması
 
-CBBA iki aşamayı dönüşümlü olarak tekrarlar: (i) **demet oluşturma** (bundle construction), (ii) **çakışma çözümü / uzlaşma** (conflict resolution / consensus). Çakışmasız bir atama elde edilip `N_min ≜ min{N_t, N_u·L_t}` sağlanana kadar sürer. [G §III, Choi 2009 G'den aktarma]
+CBBA iki aşamayı dönüşümlü olarak tekrarlar: (i) **demet oluşturma**, (ii) **çakışma çözümü / uzlaşma**. Çakışmasız bir atama elde edilene kadar sürer. [G §III; Choi 2009 → G]
 
-### C2.1 Choi 2009'dan gelen kısımlar (orijinal CBBA) — [G §III'te özetlendiği haliyle]
+### C2.1 Choi 2009'dan gelenler (orijinal CBBA)
 
-- Her İHA `i` iki liste tutar:
+- Her İHA iki liste tutar:
   - **Demet `b_i`:** görevler eklenme sırasıyla.
-  - **Yol `p_i`:** aynı görevler, puanı en çok artıran uçuş sırasıyla.
-- **Marjinal puan artışı** (nokta görevler için):
-  ```text
-  c_ij[b_i] = 0                                         eğer j ∈ b_i
-            = max_{n ≤ |p_i|}  S_i^{p_i ⊕n {j}} − S_i^{p_i}   aksi halde        (G Eq. 1)
-  ```
-  `⊕n`: görevi yolun n'inci elemanından sonra eklemek.
-- **Demet ve yol güncellemesi:**
-  ```text
-  b_i = b_i ⊕end {J_i},    p_i = p_i ⊕_{n_i,J_i} {J_i}                        (G Eq. 2)
-  ```
-  `J_i`: puanı en çok artıran görev; `n_i`: yoldaki en iyi ekleme yeri.
-- **Azalan marjinal kazanç (DMG):** Bir görevin değeri, önüne başka görev eklenince artamaz. CBBA'nın garantileri için puan fonksiyonu bunu sağlamalıdır.
-  ```text
-  c_ij[b_i] ≥ c_ij[b_i ⊕end b]                                                (G Eq. 5)
-  ```
-- **Uzlaşma aşaması:** Her İHA komşularına kazanan teklif listesini, kazanan İHA listesini ve her İHA'dan son bilgi aldığı zaman damgasını gönderir. Çakışmalar yerel **eylem kurallarıyla** çözülür. [G §III → Choi 2009]
-  - ⚠️ Eylem kurallarının kendisi (güncelle / sıfırla / bırak tablosu) Grøntved'de **yazmıyor**; Choi 2009'dan alınacak (K1).
-- **Teklif kaybedilince:** Demette o görevden **sonra** eklenen görevler de çıkarılır, çünkü puanları artık geçersiz bilgiye dayanır. [G §III]
-- **Karmaşıklık:** Bir İHA için demet oluşturma en kötü durumda `O(N_t · L_t)`. [G Eq. 3]
-- **Yakınsama:** En fazla `max{N_t, L_t·N_u} · D` iterasyonda; `D` ağ çapı, en fazla `N_u`. [G §III] Tam bağlı ağda `D = 1`.
-- **Optimallik:** İHA'ların kazananlar hakkındaki bilgisi doğruysa en az %50 optimallik garantisi. [G §III]
+  - **Yol `p_i`:** aynı görevler, puanı en çok artıran uçuş sırasıyla. [G §III; T23 CBBA.py:48-51]
+- **Marjinal puan:** `c_ij[b_i] = 0` eğer `j ∈ b_i`; aksi halde `max_{n≤|p_i|} S_i^{p_i ⊕n {j}} − S_i^{p_i}`. [G Eq. 1]
+- **Güncelleme:** `b_i = b_i ⊕end {J_i}`, `p_i = p_i ⊕_{n_i,J_i} {J_i}`. [G Eq. 2; T23 CBBA.py:252-272]
+  - Kodda bir görev ancak teklifi, İHA'nın o görev için bildiği en yüksek tekliften büyükse eklenebilir. [T23 CBBA.py:255-260]
+- **Azalan marjinal kazanç (DMG):** `c_ij[b_i] ≥ c_ij[b_i ⊕end b]`. [G Eq. 5]
+- **Uzlaşma:** Her İHA kazanan teklifleri (`y`), kazanan İHA'ları (`z`) ve zaman damgalarını (`s`) gönderir. Çakışmalar yerel eylem kurallarıyla çözülür. [G §III → Choi 2009]
+  - Kodda **17 kural** (güncelle / sıfırla / bırak) olarak uygulanmış. [T23 CBBA.py:274-404]
+  - **Eşit tekliflerde küçük kimlikli İHA kazanır.** [T23 CBBA.py:308-310, 321, 354, 374-376]
+  - ⚠️ K1 kararı "Choi 2009 tablosu aynen" olduğu için kurallar Choi PDF'iyle satır satır karşılaştırılacak. O zamana kadar T23 geçici referans.
+- **Teklif kaybedilince:** Demette kaybedilen ilk görevden (`n̄`) sonraki görevler de çıkarılır. [G §III; T23 CBBA.py:406-427]
+- **Karmaşıklık** `O(N_t·L_t)` [G Eq. 3]. **Yakınsama sınırı** `max{N_t, L_t·N_u}·D` [G §III]. %50 optimallik garantisi [G §III].
 
 ### C2.2 Grøntved 2023'ün katkısı (yörünge görevleri)
 
-- **Yönlü marjinal puan:** Her olası ekleme yeri ve her iki yön denenir.
-  ```text
-  c_ij[b_i] = 0                                                             eğer j ∈ b_i
-            = max_{n ≤ |p_i|}  max_dir  S_i^{p_i ⊕n {j_dir}} − S_i^{p_i}         aksi halde   (G Eq. 8)
-  ```
-  `j_dir`: önceki görevlere ve yönlere göre en yüksek puanı veren yaklaşma yönü (açgözlü iyileştirme). [G §IV-A]
-- **Yön değiştirme kuralı:** İHA, `τ(p_{u1}) < τ(p_{u0})` ise yani çıkış ucuna daha erken varabiliyorsa `u0` ile `u1`'i yer değiştirir. [G §IV-A]
-- **İlk görev** eklenirken puan İHA'nın başlangıç konumuna göre hesaplanır. [G §IV-A]
-- Açık artırmayı kazandıktan sonra, uzlaşmadan önce, İHA görevi en iyi yönde ve en iyi yere yoluna ekler (G Eq. 2). Yön ve sıra paylaşılmaz. [G §IV-A]
-- **Sınırlılık:** Makale Eq. 8 ile DMG'nin (Eq. 5) korunduğunu **kanıtlamıyor** → A2'de deneysel olarak test edilecek (C5).
+- **Yönlü marjinal puan:** `c_ij[b_i] = max_n max_dir S_i^{p_i ⊕n {j_dir}} − S_i^{p_i}`. [G Eq. 8]
+- **Yön değiştirme kuralı:** `τ(p_{u1}) < τ(p_{u0})` ise `u0` ile `u1` yer değiştirir. [G §IV-A]
+  - Kodda: eklenen görevin yalnızca **kendinden önceki** görevin çıkışına göre iki ucu karşılaştırılır; daha erken varılan uç giriş olur. [T23 CBBA.py:169-178, 198-205]
+  - Görev yolun **başına** (n = 0) ekleniyorsa yön değerlendirilmez. [T23 CBBA.py:186, 199]
+  - Sonraki görevle bağlantı yön seçiminde hesaba katılmaz.
+  - Yani makaledeki "her yön için en büyük" ifadesinin kodda daraltılmış bir uygulaması var (K14).
+- **İlk görev** eklenirken puan başlangıç konumuna göre hesaplanır. [G §IV-A; T23 CBBA.py:186]
+- **Sınırlılık:** Makale, Eq. 8 ile DMG'nin korunduğunu kanıtlamıyor. A2'de deneysel olarak test edilecek (K10).
 
 ## C3. Puan fonksiyonu ve maliyet modeli
 
 **Zamana göre indirimli ödül:**
 ```text
-S_i^{p_i} = Σ_{j ∈ p_i}  λ^{τ_ij(p_i)} · c̄_j                                   (G Eq. 6)
+S_i^{p_i} = Σ_{j ∈ p_i}  λ^{τ_ij(p_i)} · c̄_j                                    (G Eq. 6)
 ```
-- `τ_ij(p_i)`: İHA `i`'nin mevcut yol `p_i` üzerinde görev `j`'ye **varış** süresinin tahmini.
-- `c̄_j`: görevin sabit ödülü. Makalede bütün görevler için sabit tutuluyor. [G §IV-A] Değeri yazmıyor (K3).
-- `λ ∈ (0, 1)`: indirim çarpanı. Deneylerde `λ = 0.95`. [G §V]
+- `τ_ij`: göreve varış süresi tahmini [G Eq. 6].
+- `c̄_j`: sabit ödül, kodda `reward = 1` [T23 Task.py:13].
+- `λ = 0.95` [G §V; T23 CBBA.py:69].
 
-**Hız rampası modeli** (görevler arasında tam duruş):
+**Hız rampası** (görevler arasında tam duruş):
 ```text
              ⎧ sqrt( 4·d / a_max ),            d <  d_a
   τ(d)  =    ⎨                                                 d_a = v_max² / a_max      (G Eq. 7)
              ⎩ d / v_max  +  v_max / a_max,    d ≥ d_a
 ```
-- `d`: gidilecek mesafe. Makalede: yol `p_i` üzerinde görev `j`'ye kadar biriken mesafe `d_i^j`.
-- `v_max = 3 m/s`, `a_max = 1 m/s²` ⇒ `d_a = 9 m`. [G §V]
-- Model, SAR'daki keskin dönüşlerde İHA'nın neredeyse durmasını temsil eder; görevler arasında tam duruş zorunlu tutularak ek maliyet eklenir. Kaynağı Bähnemann vd. 2021 [8] ve Agarwal & Akella 2022 [11]. [G §IV-A]
-- `τ_i(p_i)`, bir önceki görevin çıkış noktasından sonraki görevin giriş noktasına kadar, yoldaki her görev için süreyi hesaplar. [G §IV-A]
-- Kontrol için iki örnek: `d = 4,5 m` ⇒ `τ = √18 ≈ 4,243 s`; `d = 20 m` ⇒ `τ = 20/3 + 3 ≈ 9,667 s`. Bu değerler A2'de birim testi olacak.
-- ⚠️ Makale şunları açıkça yazmıyor:
-  - Rampanın **şeridin kendi uçuşuna** ayrı mı uygulandığı (giriş ve çıkışta durarak).
-  - `τ_ij`'nin şeridin **başlangıcına** mı **bitişine** mi varış süresi olduğu.
+- Kodda birebir aynı. [T23 CBBA.py:149-151]
+- `v_max = 3 m/s`, `a_max = 1 m/s²` ⇒ `d_a = 9 m`. [G §V; T23 CBBA.py:38-39]
+- Kaynağı Bähnemann vd. 2021 [8] ve Agarwal & Akella 2022 [11]. [G §IV-A]
+- Kontrol değerleri (A2 birim testi): `d = 4,5 m` → `4,243 s`; `d = 20 m` → `9,667 s`.
 
-  → **MAKALEDE YOK – karar gerekli** (K2).
+**Kodda netleşen ayrıntılar** (makale yazmıyor):
 
-**Nokta görev karşılaştırması** (%6 sonucu için): (i) giriş noktasına Öklid uzaklığıyla tek nokta maliyet tahmini; (ii) yön iyileştirmeli yörünge tahmini. [G §V-A]
+| Konu | trajallocpy (T23) | Karar |
+|---|---|---|
+| **Mesafe `d`** | Düz çizgi değil. **Engellerden kaçınan en kısa yol** (görünürlük grafiği, `extremitypathfinder` kütüphanesi). [T23 CBBA.py:139-141, CoverageProblem.py:27-50] | K13 |
+| **Engel ve sınır ölçeği** | Yol planlamasında engeller merkezlerine göre **%95'e küçültülüyor**, alan sınırı **%101'e büyütülüyor**. [T23 main.py:71-80] Şeritler engel kenarlarında olduğu için (A0.2) bu gerekli. | K13 |
+| **Rampa nerede uygulanıyor** | Her ayak ayrı: depot → ilk giriş, her geçiş (çıkış → sonraki giriş), her şeridin kendisi (giriş → çıkış), son çıkış → depot. [T23 CBBA.py:107-118] | K2 ✅ |
+| **`τ_ij` neyi içeriyor** | Puan hesabında **yalnızca geçiş süreleri** toplanıyor; şeritlerin kendi uçuş süreleri `τ`'ya eklenmiyor. [T23 CBBA.py:181-211] | K2 (kod esas) |
+| **Puanda depot'a dönüş** | Yeni görevli yolun puanına depot'a dönüş için bir terim daha ekleniyor [T23 CBBA.py:213-218], ama mevcut yolun puanında bu terim yok [T23 CBBA.py:159-167]. Tutarsızlık. | K14 |
+| **Kapasite kontrolü** | Görev **eklenmeden önce** kontrol ediliyor, bu yüzden son eklenen görev kapasiteyi aşabiliyor. [T23 CBBA.py:253] Yazarların sonuçlarında görülüyor: 2 İHA × 1500 s dosyasında en uzun rota 1507,6 s. | K14 |
+
+**Nokta görev karşılaştırması** (makaledeki %6 sonucu):
+- Makale: "giriş noktasına Öklid uzaklığı". [G §V-A]
+- Kod: aynı rampa ve görünürlük grafiği maliyeti kullanılıyor, yön optimizasyonu kapatılıyor (`use_single_point_estimation`). [T23 CBBA.py:192-196]
+- ⚠️ T23'te komut satırındaki `--point_estimation` seçeneği okunuyor ama algoritmaya **iletilmiyor** [T23 main.py:134, 84-85]. Bu sürümle %6 deneyinin nasıl çalıştırıldığı belirsiz.
 
 ## C4. Parametre tablosu
 
 | Parametre | Değer | Kaynak | Not |
 |---|---|---|---|
-| İndirim çarpanı `λ` | **0,95** | [G §V] "discount factor λ = 0.95" | **Karar: 0,95 kullanılacak.** Yazarların `trajallocpy` kodunda 0,99 olduğu bildirildi (kullanıcı notu; bu planda doğrulanmadı). Karşılaştırma makaledeki sonuçlarla yapıldığı için makale metni esas. |
-| `v_max` | 3 m/s | [G §V] | Simülasyonda ölçülen en yüksek hız 3,13 m/s (CLAUDE.md §13) |
-| `a_max` | 1 m/s² | [G §V] | |
-| `d_a` | 9 m | [G Eq. 7] türetilmiş | `v_max²/a_max` |
-| Ödül `c̄_j` | sabit | [G §IV-A] | Sayısal değer → K3 |
-| Kapasite `L_t` (D1 ana karşılaştırma) | 2 İHA × **1200 s** | [G §V intro, §V-A, Fig. 2, Fig. 3] | |
-| Kapasite (ölçeklenebilirlik) | 2 İHA: 1500 s · 4: 750 s · 6: 600 s · 8, 10, 12, 14: 500 s | [G Fig. 4 ve Fig. 5 açıklamaları] | ⚠️ İHA sayıları **2'şer adımla**: 2, 4, 6, 8, 10, 12, 14. 9, 11, 13 İHA test edilmemiş. |
-| Ağ topolojisi | Tam bağlı | [G §V] | Yazarlar, topoloji ve tutarsız bilginin etkisinin az olduğunu Choi 2009'a dayanarak söylüyor. |
-| Azami atama çarpanı `ω` | 15 | [G §V] → Turner vd. 2017 [26] | Aynı görevlerin tekrar tekrar açık artırmaya çıkmasını önler. **Tanım Grøntved'de yok** → K5. |
-| Depot | Rastgele, bütün İHA'lar için ortak | [G §V-A] | Dağılım ve tekrar sayısı → K4 |
-| Veri seti | AC300: 300 ortam, her biri 10.000 m², 0–15 engel, 35–161 görev | [G §V] | |
-| Sensör | "3 m² field-of-view" | [G §V] | ⚠️ CoverageTasks README'si "sweep-width of 3 meters" diyor; makalede birim m². Görselleştirmede 3 m genişlik kullanılacak (README). |
-| Görev üretimi | Agarwal & Akella [11] tarama çizgileri (boustrophedon) | [G §V] | `scenarios/` verisi bu |
-| **Makale sonuçları (karşılaştırma hedefleri)** | | | |
-| Toplam süre, 2 İHA × 1200 s, bütün AC300 | Merkezi [11]: 544.592 s · Grøntved: 554.920 s · fark 10.328 s = **%1,9** | [G §V] | |
-| Yörünge ve nokta puanlama | Yörünge ortalama **%6** daha iyi | [G §V-A, Fig. 2] | ⚠️ Metinde "2 İHA, 1200 s" deniyor, ama hemen ardından "farklı İHA sayılarında" deniyor; Fig. 2 açıklaması 2 İHA diyor. D1'de 2 İHA esas alınacak. |
-| En uzun İHA süresi (ortalama) | 2 İHA: **972 s** · 14 İHA: **229 s**; ~10 İHA'dan sonra belirgin iyileşme yok | [G §V-A, Fig. 4] | Ölçeklenebilirlik kapasiteleriyle |
-| Yakınsama iterasyonu | İHA sayısıyla hafif artış | [G §V-B, Fig. 5] | Sayısal değer yalnızca grafikte |
-| Yazarların donanımı | Python, i5-9400F, 16 GB, Ubuntu 20.04 | [G §V] | |
+| `λ` | **0,95** | [G §V]; [T23 CBBA.py:69] | **Karar: 0,95.** Güncel kodda 0,99 [T-HEAD trajallocpy/CBBA.py:86]. 0,99'a geçiş makaleden sonra, commit `7fdad3d` (15 Ağu 2024, "fixed floatingpoint error"). Makale dönemi kodu metinle aynı (0,95). |
+| `v_max` | 3 m/s | [G §V]; [T23 CBBA.py:38] | Simülasyonda ölçülen 3,13 m/s (CLAUDE.md §13) |
+| `a_max` | 1 m/s² | [G §V]; [T23 CBBA.py:39] | |
+| `d_a` | 9 m | [G Eq. 7] türetilmiş | |
+| `c̄_j` | 1 | [G §IV-A] "sabit"; [T23 Task.py:13] | K3 ✅ |
+| `ω` (azami atama çarpanı) | 15 | [G §V] → Turner 2017; [T23 CBBA.py:72] `removal_threshold = 15` | Tanım koddan (K5 ✅) |
+| Kapasite (D1) | 2 İHA × **1200 s** | [G §V, §V-A, Fig. 2–3] | ⚠️ Yazarların sonuç dosyalarıyla uyuşmuyor (C4.1) |
+| Kapasite (ölçeklenebilirlik) | 2: 1500 · 4: 750 · 6: 600 · 8/10/12/14: 500 s | [G Fig. 4–5] | ⚠️ İHA sayıları 2'şer adımla. Koddaki değerler farklı (C4.1) |
+| Ağ | Tam bağlı | [G §V]; [T23 Experiment.py:27] | |
+| Depot | Rastgele, ortak | [G §V-A]; [T23 main.py:83-84, CoverageProblem.py:69-74] | K4 ✅ |
+| Veri seti | AC300: 300 ortam, 10.000 m², 0–15 engel, 35–161 görev | [G §V] | |
+| Sensör | "3 m² field-of-view" | [G §V] | CoverageTasks README'si "3 m sweep width" diyor |
+
+### C4.1 Makale ile yazarların sonuç dosyaları arasındaki farklar
+
+Yazarların sonuç dosyalarını `benchmarks/AC300/*.csv` [T23] ve deney betiğini [T23 run_experiments.sh] kendim okuyup topladım.
+
+| Makale | Yazarların dosyaları | Yorum |
+|---|---|---|
+| D1: 2 İHA × **1200 s** ile toplam **554.920 s** [G §V] | Bu sayı (554.921 s) `2robots_**1500**capacity_AC300.csv` dosyasının toplamı. 1200 s'lik yörünge sonuç dosyası **yok**. | Makaledeki yörünge sonucu büyük olasılıkla 1500 s kapasiteyle üretilmiş. |
+| Merkezi yöntem **544.592 s** [G §V] | `agarwal_AC300_1200_Capacity.csv` toplamı 544.592 s, ama **320 ortam** (AC0–AC15 × 20). Yörünge dosyası **300 ortam**. | %1,9 farkı aynı ortam kümesi üzerinden hesaplanmamış olabilir. |
+| 6 İHA × **600 s** [G Fig. 4] | `6robots_**500**capacity` dosyası ve betik `--capacity=500` | Farklı |
+| 10/12/14 İHA × **500 s** [G Fig. 4] | Betik `--capacity=**400**` ile çalıştırıp `500capacity` adıyla kaydediyor [T23 run_experiments.sh:35-37] | Farklı. 10 ve 12 İHA dosyaları eksik (177 ve 162 / 300 ortam). |
+| En uzun İHA süresi ortalaması: 2 İHA **972 s**, 14 İHA **229 s** [G §V-A] | Dosyalardan hesaplanan ortalama `maxRouteCost`: 2 İHA **1059,8 s**, 14 İHA **259,9 s** | **Uyuşmuyor.** Grafikte farklı bir ölçüt (ör. depot'a dönüş hariç) kullanılmış olabilir; doğrulanamadı. |
+
+**Sonuç:** Kullanıcı kararı gereği kapasiteler **makale metnindeki** gibi kalır (D1: 1200 s; ölçeklenebilirlik: 1500/750/600/500 s). Ek olarak D1'i **1500 s** ile de çalıştırmayı öneriyorum (K15). Böylece hangi koşulun 554.920 s'yi ürettiği gösterilebilir. Merkezi karşılaştırma toplam sayı yerine **ortam ortam**, iki dosyada da bulunan 300 ortam üzerinden yapılır (Agarwal dosyasında ortam başına `Sum of Costs of Routes` var).
 
 ## C5. Aşamalar
 
 | Aşama | İçerik | Bitti sayılma koşulu |
 |---|---|---|
-| **A1** CBBA çekirdeği (Python, simülasyonsuz) | `swarm_core` içinde: rampa (Eq. 7), puan (Eq. 6), yönlü demet oluşturma (Eq. 8), uzlaşma (Choi 2009 kuralları), mesaj geçişli ağ simülasyonu (tam bağlı, senkron turlar → K6) | Çakışmasız atama üretiyor; `swarm_core` dışında bağımlılık yok |
-| **A2** h1 ile birim testler | Elle hesaplanmış küçük örnekler: Eq. 7 değerleri (C3), tek İHA'da yön seçimi, iki İHA'da çakışma çözümü, sıfır uzunluklu görev (h1 #9), kapasite sınırı, yakınsama üst sınırı, DMG'nin deneysel kontrolü | `pytest` geçiyor; h1'in birimi belirsiz olduğu için yalnızca mantık testi (CLAUDE.md §12) |
-| **A3** AC300'de D1 ve makaleyle karşılaştırma | 300 ortamın hepsi; D1–D3 (C7) | Sonuçlar ve makaledeki değerler yan yana tabloda; fark yorumlanmış |
-| **A4** Enerji modeli | Zeng vd. 2019 döner kanatlı İHA güç modeli; Rodrigues vd. 2021 uçuş/enerji verisiyle kontrol | Model + veriyle hata analizi. **Sınırlılık:** Rodrigues verisindeki araç x500 değil (kullanıcı notu); aracın modeli ve özellikleri Rodrigues 2021 metninden **doğrulanacak**. İki kaynak henüz okunmadı; parametreler A4 planında, kaynaklarıyla yazılacak. |
-| **A5** Dayanıklılık | Paket kaybı, İHA arızası sonrası yeniden atama, lider kaybı (D4, D5) | Makalede olmayan katkı: yazarlar bunları gelecek çalışma olarak belirtiyor [G §VI] |
-| **A6** Gazebo entegrasyonu | CBBA çıktısı → A0 arayüzü → uçuş (D6) | 5 İHA (ya da WSL yetmezse 2/4) ile AC10_0000 üzerinde gösterim |
+| **A1** CBBA çekirdeği | `swarm_core`: rampa, görünürlük grafiğiyle mesafe (K13), puan, yönlü demet, 17 kurallı uzlaşma, senkron ağ simülasyonu | Çakışmasız atama; `swarm_core` Gazebo/MAVSDK/arayüzden bağımsız |
+| **A2** h1 ile birim testler | Eq. 7 değerleri, yön seçimi, eşit teklif (küçük kimlik kazanır), demet kesme (`n̄`), `ω` eşiği, kapasite, sıfır uzunluklu görev, DMG kontrolü, yakınsama sınırı | `pytest` geçiyor (h1 birimsiz; yalnızca mantık testi) |
+| **A3** AC300'de D1–D3 | Makale ve yazarların dosyalarıyla ortam ortam karşılaştırma | C4.1'deki tabloların bizim sonuçlarımızla dolu hali |
+| **A4** Enerji modeli | Zeng vd. 2019 güç modeli; Rodrigues vd. 2021 verisiyle kontrol | **Sınırlılık:** Rodrigues verisindeki araç x500 değil (kullanıcı notu); model adı ve özellikleri Rodrigues 2021'den doğrulanacak. İki kaynak henüz okunmadı. |
+| **A5** Dayanıklılık | Paket kaybı (D4), İHA arızası ve yeniden atama, lider kaybı (D5) | Makalede gelecek çalışma olarak geçiyor [G §VI] |
+| **A6** Gazebo | CBBA → A0 arayüzü (`source: "cbba"`, `reversed`) → uçuş (D6) | 5 İHA (WSL yetmezse 2 veya 4) |
 
 ## C6. Dosyalar ve mevcut kodla bağlantı
 
@@ -470,74 +480,74 @@ S_i^{p_i} = Σ_{j ∈ p_i}  λ^{τ_ij(p_i)} · c̄_j                            
 
 | Dosya | İçerik | Kaynak |
 |---|---|---|
-| `swarm_core/motion.py` | `ramp_time(d, v_max, a_max)` | G Eq. 7 |
-| `swarm_core/scoring.py` | Yol süresi `τ` ve puan `S` (yönlü yollar için); nokta puanlama (karşılaştırma için) | G Eq. 6, §V-A |
-| `swarm_core/cbba.py` | `CbbaAgent`: demet/yol, yönlü marjinal puan, kapasite kontrolü, uzlaşma kuralları | G Eq. 1, 2, 8; Choi 2009 |
-| `swarm_core/network.py` | Mesaj geçişi: tam bağlı, senkron turlar; A5'te paket kaybı ve İHA düşürme | G §V; A5 |
-| `swarm_core/allocation.py` | `run_cbba(tasks, uavs, params) → Allocation` (atama, yönler, iterasyon sayısı) | — |
-| `swarm_core/params.py` | Deney parametreleri (λ, v_max, a_max, kapasiteler, ω), her biri kaynağıyla | C4 |
+| `swarm_core/motion.py` | `ramp_time(d, v_max, a_max)` | G Eq. 7; T23 CBBA.py:149-151 |
+| `swarm_core/environment.py` | Engellerden kaçınan en kısa yol (K13); engel %95, sınır %101 ölçeği | T23 CoverageProblem.py, main.py:71-80 |
+| `swarm_core/scoring.py` | Yol süresi, puan, kapasite maliyeti; nokta puanlama modu | G Eq. 6; T23 CBBA.py:107-219 |
+| `swarm_core/cbba.py` | `CbbaAgent`: demet/yol, yönlü teklif, 17 kural, `ω` sayacı | G Eq. 1, 2, 8; T23 CBBA.py; Choi 2009 |
+| `swarm_core/network.py` | Senkron turlar, tam bağlı; A5'te paket kaybı ve İHA düşürme | T23 Experiment.py:102-157 |
+| `swarm_core/allocation.py` | `run_cbba(...) → Allocation(assignment, reversed, iterations, costs)` | — |
+| `swarm_core/params.py` | Deney parametreleri, her biri kaynağıyla | C4 |
 | `tests/test_motion.py`, `test_scoring.py`, `test_cbba.py` | A2 | — |
 | `experiments/` (repo içinde, `swarm_core` dışında) | D1–D5 çalıştırıcıları ve sonuç tabloları | — |
 
 **Mevcut koddan kullanılacaklar:**
-- `swarm_core/dataset.py`: `load_tasks()` (görev kimliği, `waypoints = [u0, u1]`), `load_boundary()` (depot üretimi için), `load_obstacles()`. Değişmez.
-- `swarm_core/models.py`: `Task` olduğu gibi kullanılır. `UAV` başlangıç konumu (`x, y`) için kullanılır.
-  - `UAV.battery` ve `UAV.is_leader` A4/A5'e kadar kullanılmaz; silinmez (kural 3).
-  - CBBA'nın iç durumu (demet, yol, kazanan listeleri) `models.py`'ye eklenmez; `cbba.py` içinde ayrı tutulur.
-- `swarm_core/tasks.py` ve `coverage.py` (eski 20 bölgelik örnek): CBBA kullanmaz. **Legacy** olarak işaretlenecek (kural 3); testleri kalır.
+- `swarm_core/dataset.py` (`load_tasks`, `load_boundary`, `load_obstacles`) değişmez.
+- `swarm_core/models.py`: `Task` ve `UAV` (başlangıç konumu) kullanılır. `UAV.battery` ve `UAV.is_leader` silinmez. CBBA'nın iç durumu `cbba.py` içinde tutulur.
+- `swarm_core/tasks.py` ve `coverage.py`: CBBA kullanmaz; legacy olarak işaretlenecek (kural 3).
 
-**CBBA çıktısının A0 arayüzüne bağlanması:**
+**A0 arayüzüne bağlantı:**
 ```text
-swarm_core.allocation.run_cbba(...)  →  Allocation(assignment={1: [5, 2, 9], 2: [...]}, reversed={1: [False, True, False], ...})
-                                       │  (saf Python, ağ yok)
-swarm_sim/ (ör. cbba_mission.py)      →  mission_events.send_assignment(assignment, source="cbba", reversed=...)
-                                       ▼
-A0 2D harita / Gazebo işaretçileri    →  aynı kod; panelde "CBBA" etiketi
+swarm_core.allocation.run_cbba(...) → Allocation(assignment={1: [5, 2, 9]}, reversed={1: [False, True, False]})
+swarm_sim/cbba_mission.py           → mission_events.send_assignment(assignment, reversed=..., source="cbba")
+A0 harita / Gazebo işaretçileri      → aynı kod; panelde "CBBA"
 ```
-- ⚠️ **A0 arayüzüne eklenmesi önerilen alan — karar gerekli (K9):** `assignment` mesajında yön bilgisi yok. CBBA her görev için yön seçtiği için, planlanan rotanın çizilmesi ve uçuş için `reversed` (isteğe bağlı, İHA başına bool listesi; yoksa hepsi `false`) alanı eklenmeli. Bu, A0 kodlanmadan önce karara bağlanmalı. Böylece CBBA eklendiğinde görselleştirme kodu yine değişmez.
+`reversed` alanı A0.0.5'e eklendi (K9 ✅).
 
 ## C7. Deneyler ve İHA sayıları
 
 **Alınan kararlar** (kullanıcı, 24 Kasım 2026):
-1. **Python deneyleri (D1–D5)** makaledeki İHA sayıları ve kapasitelerle yapılır.
-   - **Gerekçe:** D1, makaleyle doğrudan karşılaştırmadır; aynı koşullar olmadan karşılaştırma anlamsız olur.
-   - **Değerler:** D1: 2 İHA × 1200 s. Ölçeklenebilirlik: 2/4/6/8/10/12/14 İHA × 1500/750/600/500 s. [G §V, Fig. 4]
-2. **Gazebo gösterimi (D6):** proje tanımındaki **5 İHA**, İHA başına **600 s**.
-   - **MAKALEDE YOK – temkinli seçim:** Makale 5 İHA için kapasite vermiyor. 5'e en yakın iki değer 4 İHA (750 s) ve 6 İHA (600 s); daha kısıtlayıcı olan 600 s seçildi.
-   - WSL performansı yetmezse D6, 2 veya 4 İHA ile yapılır ve sınırlılık olarak yazılır.
-3. **λ = 0,95** (makale metni), trajallocpy'deki 0,99 değil. **Gerekçe:** karşılaştırma makaledeki sonuçlarla yapılıyor.
-
-**Deneylerin tanımı (öneri):**
+1. **Python deneyleri (D1–D5)** makaledeki İHA sayıları ve kapasitelerle yapılır. **Gerekçe:** D1 makaleyle karşılaştırmadır.
+   - D1: 2 İHA × 1200 s.
+   - Ölçeklenebilirlik: 2/4/6/8/10/12/14 İHA × 1500/750/600/500 s [G §V, Fig. 4]. (Kodla farklar C4.1'de.)
+2. **D6 (Gazebo):** 5 İHA × 600 s. **MAKALEDE YOK – temkinli seçim:** 5 İHA için kapasite yok; 4 İHA (750 s) ile 6 İHA (600 s) arasından daha kısıtlayıcı olan seçildi. WSL yetmezse 2 veya 4 İHA ile yapılır ve sınırlılık olarak yazılır.
+3. **λ = 0,95.**
 
 | Deney | Soru | Koşullar | Makaledeki karşılığı |
 |---|---|---|---|
-| D1 | Bizim uygulamamız makaledeki sonuca ulaşıyor mu? | 2 İHA × 1200 s, 300 ortam; yörünge ve nokta puanlama | Toplam 554.920 s; %6 iyileşme; merkezi ile %1,9 fark [G §V, §V-A] |
-| D2 | Ölçeklenebilirlik | 2–14 İHA (2'şer), kapasiteler C4 | Ortalama en uzun süre 972 → 229 s [G Fig. 4] |
-| D3 | Yakınsama | D2 ile aynı | İterasyon sayısı [G Fig. 5] |
-| D4 | Paket kaybı | D1 koşulları + kayıp oranları (K7) | Makalede yok (katkı) |
-| D5 | İHA arızası, yeniden atama, lider kaybı | D1/D2 koşulları + olaylar (K7, K8) | Makalede yok (katkı) |
+| D1 | Bizim uygulamamız makaledeki sonuca ulaşıyor mu? | 2 İHA × 1200 s (+ K15: 1500 s), 300 ortam; yörünge ve nokta puanlama; merkezi ile ortam ortam | 554.920 s; %6; %1,9 |
+| D2 | Ölçeklenebilirlik | 2–14 İHA, 2'şer adım | 972 → 229 s [G Fig. 4] |
+| D3 | Yakınsama | D2 ile aynı | [G Fig. 5] |
+| D4 | Paket kaybı | D1 koşulları + K7 | Makalede yok (katkı) |
+| D5 | İHA arızası, yeniden atama, lider kaybı | D1/D2 + olaylar (K8) | Makalede yok (katkı) |
 | D6 | Gazebo gösterimi | AC10_0000, 5 İHA × 600 s | Makalede yok |
 
-**Not:** Merkezi yöntemi (Agarwal & Akella 2022) çalıştırmıyoruz. D1'de bizim sonucumuz makalenin **yayımladığı** merkezi değerle (544.592 s) karşılaştırılır.
+## C8. "MAKALEDE YOK" maddeleri — kararlar ve trajallocpy karşılaştırması
 
-## C8. "MAKALEDE YOK" maddeleri: öneriler (onay bekliyor)
-
-| # | Konu | Öneri | Gerekçe |
+| # | Konu | Durum | Karar ve kaynak |
 |---|---|---|---|
-| K1 | Uzlaşma eylem kuralları (güncelle/sıfırla/bırak), eşit tekliflerde kazanan | Choi 2009'daki tablo **aynen** uygulanır. Choi 2009 PDF'i `~/makaleler/`'e eklenir ve A1'den önce okunur. Tablo bulunana kadar uzlaşma kodu yazılmaz. | Grøntved bu kısmı doğrudan Choi 2009'a bırakıyor [G §III]. Tahminle yazılırsa yakınsama garantisi bozulabilir. |
-| K2 | Rampa şeridin kendisine de uygulanıyor mu? `τ_ij` şeridin başına mı sonuna mı varış? | Her ayak ayrı ayrı Eq. 7 ile hesaplanır: geçiş ayağı (önceki çıkış → giriş) ve şerit ayağı (giriş → çıkış), aralarda tam duruş. `τ_ij` = **giriş noktasına varış** süresi. Kapasite kontrolü = son görevin **çıkışına** kadar toplam süre. | Makale "görevler arasında tam duruş" diyor [G §IV-A] ve `τ_ij`'yi "göreve varış süresi" olarak tanımlıyor [G Eq. 6]. Yön kuralı da uçlara varış süresini karşılaştırıyor [G §IV-A]. Bizim uçuş kodumuz da her ayakta duruyor (`fly_task.py`). |
-| K3 | Ödül `c̄_j` değeri | `c̄_j = 1` (bütün görevler) | Makale ödülü sabit tutuyor [G §IV-A]. Sabit bir çarpan teklif sıralamasını değiştirmez. |
-| K4 | Depot nasıl rastgele seçiliyor, kaç tekrar? | Alan poligonu içinde, engel dışında, düzgün dağılımlı; ortam başına sabit tohum (ortam adından türetilmiş). D1'de ortam başına **1** depot (makaledeki gibi tek toplam). Ek olarak 5 tohumla duyarlılık analizi. | Makale "rastgele ve ortak" diyor ama dağılım vermiyor [G §V-A]. Tek depot makalenin raporlama biçimine uyuyor; tohum sabitlemek tekrarlanabilirlik sağlar. |
-| K5 | `ω = 15`'in tanımı | Turner vd. 2017 [26] okunup tanım oradan alınır. O zamana kadar `ω` kullanılmaz; yakınsama, Choi 2009'un üst sınırı (C2.1) ve bir iterasyon tavanıyla izlenir. İzlenen değer "test ayarı" olarak işaretlenir. | Grøntved yalnızca değeri ve amacını veriyor [G §V]. |
-| K6 | Senkron mu asenkron mu, iterasyon nasıl sayılıyor? | Senkron turlar: her turda bütün İHA'lar demet oluşturur, sonra mesaj alışverişi yapar. 1 tur = 1 iterasyon. Choi 2009'dan doğrulanacak. | Asenkron CBBA ayrı bir çalışma olarak anılıyor (Johnson vd. 2011 [23]); bu, temel CBBA'nın senkron olduğunu düşündürüyor, ama doğrulanmadı. |
-| K7 | D4 paket kaybı oranları, tekrar sayısı | Mesaj başına bağımsız kayıp: %0, 10, 20, 30, 50; oran başına 10 tohum; metrik: yakınsama turu, çakışma sayısı, toplam süre artışı | Makalede yok (katkı). Aralık, kayıpsızdan ağır kayba kadar eğilimi göstermek için; kesin değerler literatürden ayrıca gerekçelendirilebilir. |
-| K8 | "Lider" nedir? (CBBA lider gerektirmez) | Lider yalnızca **izleme/raporlama** rolü: atamayı toplayıp operatöre (A0 paneli) iletir. Atama kararı vermez. Lider kaybında yeni lider seçimi en küçük canlı İHA kimliğiyle yapılır; D5'te atamanın lider kaybından **etkilenmediği** gösterilir. | CBBA tam dağıtıktır [G §III]. Projenin "lider seçimi" hedefi (CLAUDE.md §1) atama mantığını merkezileştirmemeli. |
-| K9 | A0 arayüzünde yön bilgisi | `assignment` mesajına isteğe bağlı `reversed` alanı (C6) | CBBA yön seçiyor [G Eq. 8]; görselleştirme kodu CBBA'da değişmemeli (A0.0.5). |
-| K10 | Eq. 8 ile DMG korunuyor mu? | A2'de rastgele küçük örneklerle Eq. 5'in sağlanıp sağlanmadığı test edilir. Bozuluyorsa sonuçlarda sınırlılık olarak yazılır. | Makale bunu göstermiyor; CBBA garantileri DMG'ye bağlı [G §IV-A]. |
-| K11 | Görev 0 uzunluklu (`u0 = u1`) | Nokta görev gibi işlenir: şerit ayağı 0 s, yön seçimi yok | Makale özel durumu anıyor [G §IV]; CLAUDE.md §12 kararı. |
-| K12 | Kapasiteye dönüş (depot'a geri) dahil mi? | Dahil **değil**: kapasite = son görevin çıkışına kadar süre | Makale yalnızca "yol maliyetlerinin toplamı" diyor [G §V] ve geri dönüşten söz etmiyor. Merkezi yöntemin [11] dönüşü sayıp saymadığı bilinmiyor → D1 karşılaştırmasında sınırlılık olarak not edilir. |
+| K1 | Uzlaşma kuralları, eşit teklif | ✅ Karar: Choi 2009 tablosu aynen. ⏳ PDF bekleniyor (MIT 429). | Geçici referans: 17 kural [T23 CBBA.py:274-404]; eşitlikte küçük kimlik [T23 CBBA.py:308-310]. Choi PDF'iyle karşılaştırılmadan uzlaşma kodu "tamamlandı" sayılmaz. |
+| K2 | Rampa nerede, `τ` neyi içeriyor | ✅ Kod esas | Her ayak ayrı rampa [T23 CBBA.py:107-118] — **önerimle aynı**. `τ_ij` = yalnızca birikmiş **geçiş** süreleri, şerit süreleri hariç [T23 CBBA.py:181-211] — **önerimden farklı** (ben şerit sürelerinin de dahil olmasını önermiştim). Kapasitede şerit süreleri dahil. |
+| K3 | `c̄_j` | ✅ | 1 [T23 Task.py:13] — önerimle aynı. |
+| K4 | Depot | ✅ Kod esas | Sınır kutusunda düzgün dağılım; alan dışı ve engel içi noktalar reddediliyor [T23 CoverageProblem.py:69-74]. Ortam başına 1 depot, bütün İHA'lar için ortak [T23 main.py:83-84]. Tohum: bütün çalışma için tek tohum, `random.seed(1352323)` [T23 main.py:126-128]; ortamlar sırayla aynı rastgele diziden. **Önerimden farkı:** ben ortam başına ayrı tohum önermiştim. D1 kodu taklit eder. 5 tohumlu duyarlılık analizi ek olarak kalır (test ayarı). |
+| K5 | `ω = 15` tanımı | ✅ Koddan | Bir İHA bir görevi demetinden ilk kaybedilen görev olarak `ω`'dan fazla kez kaybederse, o görev için artık teklif vermez [T23 CBBA.py:72, 238, 421-423]. Turner 2017 gerekmedi; tanım Turner'la ayrıca karşılaştırılmadı. **Önerimden farklı:** ben `ω`'yu kullanmamayı önermiştim. |
+| K6 | Senkron/asenkron, iterasyon | ✅ | Senkron: her turda bütün İHA'lar demet oluşturur → mesajlar toplanır → bütün İHA'lar uzlaşır. 1 tur = 1 iterasyon. Bütün İHA'lar o turda hiç görev kaybetmediyse yakınsamış sayılır [T23 Experiment.py:102-157, CBBA.py:431-436]. **Önerimle aynı.** |
+| K7 | Paket kaybı oranları | ✅ | **%0, %10, %30.** Kaynak: kullanıcı notu — 10 ve 30 bir event-triggered CBBA çalışmasından; 0 temel durum. ⚠️ Çalışmanın künyesi plana eklenecek. %20 ve %50: **isteğe bağlı ek duyarlılık analizi, kaynak yok.** Oran başına 10 tohum: **test ayarı.** |
+| K8 | Lider | ✅ | Yalnızca izleme/raporlama; atama kararı vermez. Kayıpta en küçük kimlikli canlı İHA lider olur; D5'te atamanın etkilenmediği gösterilir. |
+| K9 | Yön bilgisi | ✅ | `reversed` alanı A0.0.5'e eklendi. |
+| K10 | DMG | ✅ | A2'de deneysel test; bozuluyorsa sınırlılık. |
+| K11 | Sıfır uzunluklu görev | ✅ | Nokta görev gibi. |
+| K12 | Depot'a dönüş kapasitede mi | ✅ Kod esas | **Dahil** [T23 CBBA.py:116-117]; raporlanan rota maliyetlerinde de dahil [T23 Experiment.py:43]. **Önerimden farklı** (ben dahil değil demiştim). |
+| **K13** | Mesafe nasıl hesaplanacak | ⏳ **Karar gerekli** | **Öneri:** Engellerden kaçınan en kısa yol, yazarlar gibi `extremitypathfinder` ile (pip; lisansı kurulumda kontrol edilecek). Engel %95 ve sınır %101 ölçeği de taklit edilir. **Gerekçe:** D1 karşılaştırması aynı maliyet modelini gerektirir. Alternatif: shapely + networkx ile kendi görünürlük grafiğimiz (daha çok iş, aynı sonucu verdiği ayrıca test edilmeli). |
+| **K14** | Koddaki makaleden farklı/tutarsız davranışlar: (a) yön yalnızca öncekine göre ve başa eklemede yok; (b) puanda depot dönüşü tutarsız; (c) kapasite eklemeden önce kontrol (aşılabiliyor) | ⏳ **Karar gerekli** | **Öneri:** İki mod. **`paper_compat`** (varsayılan, D1–D3): T23'ü olduğu gibi taklit eder; makale sonuçlarıyla karşılaştırma bununla. **`corrected`:** Eq. 8'deki gibi her iki yön ve her yer, tutarlı puan, kapasite aşılmaz; D4–D6'da kullanılır ve farkı ayrıca raporlanır. **Gerekçe:** Makalenin sayıları bu koddan çıktı. Ama projemizin kendi deneyleri makalenin tanımına uygun bir algoritmayla yapılmalı. |
+| **K15** | D1 kapasitesi | ⏳ **Karar gerekli** | **Öneri:** D1'i hem 1200 s (makale metni) hem 1500 s (yazarların sonuç dosyası) ile çalıştırmak; ana tablo 1200 s. **Gerekçe:** C4.1'deki uyuşmazlığı açıkça göstermek. |
 
 ## C9. Kaynak notları
 
-- **Yazar adı farkı:** Makale PDF'inde yazarlar "Kasper A. R. Grøntved, **Ulrik P. S. Lundquist**, Anders Lyhne Christensen". CoverageTasks README'sindeki BibTeX'te "Schultz, Ulrik Pagh". `scenarios/README.md` ve CLAUDE.md §12'de "Schultz" yazıyor. Kaynakçada yayımlanmış sürümdeki (IEEE) ad kullanılmalı; kontrol edilip düzeltilecek.
-- Makalenin elimizdeki sürümü yazarların kabul edilmiş son taslağı ("Accepted manuscript", SDU Research Portal). Sayfa ve denklem numaraları buna göre.
+- **Yazar adı:** Makale PDF'inde yazarlar "Kasper A. R. Grøntved, **Ulrik P. S. Lundquist**, Anders Lyhne Christensen". CLAUDE.md §12 ve `scenarios/README.md` buna göre düzeltildi (24 Kasım 2026). CoverageTasks README'sindeki BibTeX'te hâlâ "Schultz, Ulrik Pagh" yazıyor.
+- Elimizdeki makale yazarların kabul edilmiş son taslağı (SDU Research Portal). Bölüm ve denklem numaraları buna göre.
+- trajallocpy klonu: `~/makaleler/trajallocpy/` (güncel sürüm) ve `~/makaleler/trajallocpy_2023/` (`git worktree`, commit `13b7bb3`). İkisi de repo dışında; yalnızca okumak için.
+- **Eksik PDF'ler:**
+  - Choi 2009: MIT DSpace 429 hatası verdi; kullanıcı tarayıcıdan indirip `~/makaleler/Choi2009.pdf` olarak koyacak.
+  - Turner 2017: K5 koddan çözüldüğü için şimdilik gerekmiyor.
+  - Zeng 2019 ve Rodrigues 2021: A4'ten önce gerekli.
+  - Event-triggered CBBA çalışmasının künyesi: K7 için gerekli.
