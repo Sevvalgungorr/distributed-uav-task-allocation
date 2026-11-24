@@ -254,3 +254,10 @@ Hocanın "görevlerin akademik dayanağı" sorusu için görevleri CoverageTasks
   - Nokta görevlere göre %6 iyileşme
   - En uzun İHA süresi: 2 İHA'da 972 s, 14 İHA'da 229 s
 - **Yazarların gelecek çalışma olarak belirttikleri:** dinamik İHA kayıpları, kesintili haberleşme, gerçekçi simülasyon. Bu projenin katkısı tam olarak bu boşluk.
+
+## 14. Çalışma kuralları
+
+1. **Önce plan, sonra kod:** Yeni bir bileşene (ör. CBBA) kod yazmadan önce `docs/` altında bir plan dosyası yazılır. Plandaki her karar ve parametre kaynağıyla birlikte belirtilir (makale, bölüm/denklem). Plan onaylanmadan kod yazılmaz.
+2. **Kaynaksız değer deney parametresi olamaz:** Kaynağı olmayan bir değer deney parametresi olarak kullanılmaz. Yalnızca test ayarı olarak kullanılabilir ve kodda "test ayarı" diye işaretlenir.
+3. **Eski kod silinmez:** Kullanılmayacak kod silinmez, legacy olarak işaretlenir.
+4. **Küçük, test edilmiş commit'ler:** Her parça test edilir ve ayrı commit edilir.
