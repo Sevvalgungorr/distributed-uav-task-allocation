@@ -16,30 +16,33 @@ class StepFailed(Exception):
     """Bir adım zamanında veya başarıyla tamamlanamadı."""
 
 
-async def run_step(name, coro):
-    """Bir adımı 60 saniyelik zaman aşımıyla çalıştırır."""
-    print(f"\n=== {name} ===")
+async def run_step(name, coro, prefix=""):
+    """Bir adımı 60 saniyelik zaman aşımıyla çalıştırır.
+
+    prefix: çoklu İHA çıktısında satırları ayırmak için, örn. "[IHA1] ".
+    """
+    print(f"\n=== {prefix}{name} ===")
     try:
         return await asyncio.wait_for(coro, timeout=STEP_TIMEOUT_S)
     except asyncio.TimeoutError:
-        raise StepFailed(f"'{name}' adımı {STEP_TIMEOUT_S:.0f} saniyede tamamlanmadı.")
+        raise StepFailed(f"{prefix}'{name}' adımı {STEP_TIMEOUT_S:.0f} saniyede tamamlanmadı.")
     except ActionError as e:
-        raise StepFailed(f"'{name}' adımında PX4 komutu reddetti: {e.result.name}")
+        raise StepFailed(f"{prefix}'{name}' adımında PX4 komutu reddetti: {e.result.name}")
 
 
-async def leave_offboard_on_ground(action, telemetry):
+async def leave_offboard_on_ground(action, telemetry, prefix=""):
     """Önceki bir çalıştırmadan İHA yerde OFFBOARD modunda kalmışsa Hold'a alır.
 
     Yerdeyken OFFBOARD modunda kalan PX4, setpoint akışı olmadığı için arm etmeyi reddeder.
     """
     mode = await telemetry.flight_mode()
     if mode.name == "OFFBOARD" and not await telemetry.in_air():
-        print("  IHA yerde OFFBOARD modunda kalmis, HOLD moduna aliniyor...")
+        print(f"  {prefix}IHA yerde OFFBOARD modunda kalmis, HOLD moduna aliniyor...")
         await action.hold()
-    print(f"  Ucus modu: {(await telemetry.flight_mode()).name}")
+    print(f"  {prefix}Ucus modu: {(await telemetry.flight_mode()).name}")
 
 
-async def wait_for_health(telemetry):
+async def wait_for_health(telemetry, prefix=""):
     last = None
     async with aclosing(telemetry.subscribe_health()) as stream:
         async for health in stream:
@@ -51,58 +54,58 @@ async def wait_for_health(telemetry):
             )
             if status != last:
                 print(
-                    f"  yerel konum: {status[0]}, global konum: {status[1]}, "
+                    f"  {prefix}yerel konum: {status[0]}, global konum: {status[1]}, "
                     f"home: {status[2]}, arm edilebilir: {status[3]}"
                 )
                 last = status
             # is_armable da beklenir: PX4, GCS bağlantısı yeni kurulduğunda sağlık
             # durumunu birkaç saniye içinde yeniden değerlendirir; erken arm reddedilir.
             if health.is_global_position_ok and health.is_home_position_ok and health.is_armable:
-                print("  Konum tahmini, home position hazir ve IHA arm edilebilir.")
+                print(f"  {prefix}Konum tahmini, home position hazir ve IHA arm edilebilir.")
                 return
 
 
-async def wait_for_altitude(telemetry, target_m):
+async def wait_for_altitude(telemetry, target_m, prefix=""):
     async with aclosing(telemetry.subscribe_position()) as stream:
         async for pos in stream:
             if pos.relative_altitude_m >= 0.95 * target_m:
-                print(f"  Kalkis irtifasina ulasildi: {pos.relative_altitude_m:.2f} m")
+                print(f"  {prefix}Kalkis irtifasina ulasildi: {pos.relative_altitude_m:.2f} m")
                 return
 
 
-async def hover_and_report(telemetry):
+async def hover_and_report(telemetry, prefix=""):
     for second in range(1, HOVER_DURATION_S + 1):
         await asyncio.sleep(1)
         pos = await telemetry.position()
         print(
-            f"  [{second:2d} s] enlem: {pos.latitude_deg:.7f}, "
+            f"  {prefix}[{second:2d} s] enlem: {pos.latitude_deg:.7f}, "
             f"boylam: {pos.longitude_deg:.7f}, irtifa: {pos.relative_altitude_m:.2f} m"
         )
 
 
-async def wait_for_disarm(telemetry):
+async def wait_for_disarm(telemetry, prefix=""):
     async with aclosing(telemetry.subscribe_armed()) as stream:
         async for armed in stream:
             if not armed:
-                print("  Disarm edildi.")
+                print(f"  {prefix}Disarm edildi.")
                 return
 
 
-async def safe_stop(action, telemetry):
+async def safe_stop(action, telemetry, prefix=""):
     """Hata durumunda İHA'yı güvenli duruma getirmeye çalışır."""
-    print("\n=== Guvenli durdurma ===")
+    print(f"\n=== {prefix}Guvenli durdurma ===")
     try:
         if await telemetry.in_air():
-            print("  IHA havada, iniş komutu gonderiliyor...")
+            print(f"  {prefix}IHA havada, iniş komutu gonderiliyor...")
             await action.land()
         elif await telemetry.armed():
-            print("  IHA yerde ve arm durumunda, disarm ediliyor...")
+            print(f"  {prefix}IHA yerde ve arm durumunda, disarm ediliyor...")
             await action.disarm()
         else:
-            print("  IHA yerde ve disarm durumunda, ek islem gerekmiyor.")
+            print(f"  {prefix}IHA yerde ve disarm durumunda, ek islem gerekmiyor.")
     except Exception as e:
-        print(f"  Guvenli durdurma komutu basarisiz: {e}")
-        print("  PX4 terminalinden (pxh>) 'commander land' komutunu kullanin.")
+        print(f"  {prefix}Guvenli durdurma komutu basarisiz: {e}")
+        print(f"  {prefix}PX4 terminalinden (pxh>) 'commander land' komutunu kullanin.")
 
 
 async def main():

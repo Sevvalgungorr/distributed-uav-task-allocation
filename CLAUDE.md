@@ -200,6 +200,8 @@ Bağlantı testi başarılı (Sistem ID: 1). Çalışan kod: `swarm_sim/connect_
 **Aşama 1 — Tek İHA bağlantısı — TAMAMLANDI (19 Kasım 2026):** MAVSDK bağlantısı (`swarm_sim/connect_uav.py`), sağlık kontrolü ve kontrollü kalkış–bekleme–iniş (`swarm_sim/takeoff_land.py`) simülasyonda başarıyla test edildi. Kalkış irtifası kodda belirlenmedi; PX4'ün varsayılan değeri (2,5 m) `get_takeoff_altitude()` ile okundu.
 
 **Aşama 2 — Çoklu İHA simülasyonu:** Gazebo'da birden fazla x500, her İHA için ayrı PX4 örneği, Python'dan her İHA'yı ayrı kontrol. Önce 2–3 İHA, sonra 5 İHA.
+- *İlk adım tamamlandı:* 2 İHA (`-i 0` → 14540 / Sistem ID 1, `-i 1` → 14541 / Sistem ID 2, Gazebo konumları (0,0) ve (0,3)) ile eşzamanlı kalkış–bekleme–iniş (`swarm_sim/multi_takeoff_land.py`) simülasyonda başarıyla çalıştı.
+- *Gazebo kamera notu (DENENMEDİ):* PX4 her İHA'yı başlatırken Gazebo kamerasını ona kilitliyor (`px4-rc.gzsim`). Aynı betik `PX4_GZ_NO_FOLLOW` ortam değişkeni tanımlıysa takibi hiç başlatmıyor; PX4 başlatma komutlarının başına `PX4_GZ_NO_FOLLOW=1` eklemek bunu önlemeli. Betiği okuyarak çıkarıldı, henüz denenmedi.
 
 **Aşama 3 — Dağıtık görev atama:** CBBA'yı Python'da geliştirmek, teklif ve maliyet fonksiyonları, görev çakışmalarını engellemek, merkezi karar verici olmadan paylaşım, birim testleri.
 
