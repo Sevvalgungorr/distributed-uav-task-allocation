@@ -8,8 +8,10 @@ from mavsdk.asyncio.plugins.action import ActionAsync, ActionError
 from mavsdk.asyncio.plugins.telemetry import TelemetryAsync
 
 CONNECTION_URL = "udpin://0.0.0.0:14540"
-STEP_TIMEOUT_S = 60.0
-HOVER_DURATION_S = 10
+# TEST AYARLARI (CLAUDE.md bölüm 14, kural 2): Akademik kaynağı yoktur, deney parametresi değildir.
+STEP_TIMEOUT_S = 60.0         # Test ayarı: bir adımın en uzun süresi (kullanıcı tarafından belirlendi)
+HOVER_DURATION_S = 10         # Test ayarı: havada bekleme süresi (kullanıcı tarafından belirlendi)
+ALTITUDE_REACHED_RATIO = 0.95 # Test ayarı: kalkış irtifasının bu oranına ulaşınca "ulaşıldı" sayılır
 
 
 class StepFailed(Exception):
@@ -68,7 +70,7 @@ async def wait_for_health(telemetry, prefix=""):
 async def wait_for_altitude(telemetry, target_m, prefix=""):
     async with aclosing(telemetry.subscribe_position()) as stream:
         async for pos in stream:
-            if pos.relative_altitude_m >= 0.95 * target_m:
+            if pos.relative_altitude_m >= ALTITUDE_REACHED_RATIO * target_m:
                 print(f"  {prefix}Kalkis irtifasina ulasildi: {pos.relative_altitude_m:.2f} m")
                 return
 
