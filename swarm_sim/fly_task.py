@@ -14,6 +14,9 @@ Koordinat dönüşümü:
 
 UYARI: Veri setindeki engeller (obstacles) Gazebo dünyasında fiziksel olarak YOKTUR.
 Bu uçuş yalnızca gösterim amaçlıdır; engelden kaçınma veya çarpışma kontrolü yapılmaz.
+
+Görselleştirme: Görev ataması (source="manual") ve görev olayları yerel UDP'ye gönderilir
+(swarm_sim/mission_events.py, docs/cbba_plan.md A0.0.5). Dinleyen yoksa uçuş etkilenmez.
 """
 
 import argparse
@@ -31,6 +34,7 @@ from mavsdk.asyncio.plugins.offboard import (
 from mavsdk.asyncio.plugins.telemetry import TelemetryAsync
 
 from swarm_core.dataset import load_boundary, load_obstacles, load_tasks
+from swarm_sim.mission_events import MissionEventSender
 from swarm_sim.takeoff_land import (
     CONNECTION_URL,
     STEP_TIMEOUT_S,
@@ -169,7 +173,16 @@ async def main(scenario_path, task_ids):
         if drone is None:
             print(f"Zaman asimi: {STEP_TIMEOUT_S:.0f} saniye icinde baglanti kurulamadi.")
             return
-        print(f"IHA baglantisi basarili! Sistem ID: {await drone.get_system_id()}")
+        system_id = await drone.get_system_id()
+        print(f"IHA baglantisi basarili! Sistem ID: {system_id}")
+
+        # Görselleştirme arayüzü: elle verilen atama, veri setindeki yönde (reversed yok)
+        events = MissionEventSender()
+        events.send_assignment({system_id: list(task_ids)}, "manual", scenario_path)
+        print(
+            f"  Gorev olaylari {events.address[0]}:{events.address[1]} adresine gonderiliyor "
+            "(dinleyen olmasa da ucus etkilenmez)."
+        )
 
         action = ActionAsync(drone)
         telemetry = TelemetryAsync(drone)
@@ -196,6 +209,7 @@ async def main(scenario_path, task_ids):
             print("  Arm edildi.")
             await run_step("3c. Kalkis komutu", action.takeoff())
             await run_step("3d. Kalkis irtifasina yukselme", wait_for_altitude(telemetry, takeoff_alt))
+            events.send_event(system_id, "takeoff")
             await print_position(telemetry, frame, "havada")
 
             await offboard.set_velocity_ned(VelocityNedYaw(0.0, 0.0, 0.0, yaw_deg))
@@ -209,16 +223,19 @@ async def main(scenario_path, task_ids):
                     f"{prefix}: baslangica ucus ({sx:.2f}, {sy:.2f})",
                     fly_to(offboard, telemetry, frame, frame.to_ned(sx, sy), down_m, yaw_deg),
                 )
+                events.send_event(system_id, "task_started", task.task_id)
                 await run_step(
                     f"{prefix}: tarama cizgisi -> ({ex:.2f}, {ey:.2f})",
                     fly_to(offboard, telemetry, frame, frame.to_ned(ex, ey), down_m, yaw_deg),
                 )
+                events.send_event(system_id, "task_finished", task.task_id)
                 print(f"  Gorev {task.task_id} tamamlandi.")
 
             await run_step("6a. Offboard durdur", offboard.stop())
             await run_step("6b. Inis komutu", action.land())
             print("  Iniliyor...")
             await run_step("6c. Inis ve disarm", wait_for_disarm(telemetry))
+            events.send_event(system_id, "landed")
 
             print(f"\n{len(selected)} gorevlik ucus basariyla tamamlandi.")
             if obstacles:
@@ -227,6 +244,8 @@ async def main(scenario_path, task_ids):
         except (StepFailed, OffboardError) as e:
             print(f"\nHATA: {e}")
             await safe_stop(action, telemetry)
+        finally:
+            events.close()
 
 
 if __name__ == "__main__":
