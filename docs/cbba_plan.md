@@ -342,7 +342,7 @@ Her commit'ten önce `pytest`; uçuşa dokunan değişikliklerden sonra simülas
 
 # CBBA — Dağıtık görev atama
 
-> Durum: **K1 (Choi 2009 PDF'iyle doğrulama) ve K7 (paket kaybı oranlarının kaynağı) dışında kararlar alındı.** CBBA kodu henüz yazılmadı.
+> Durum: **K1 (Choi 2009 PDF'iyle doğrulama) ve K16 (İHA arıza olasılığı, aday) dışında kararlar alındı.** K7 25 Kasım 2026'da kaynaklarıyla onaylandı. CBBA kodu henüz yazılmadı.
 
 **Kaynaklar ve kısaltmalar:**
 - **[G §V-A], [G Eq. 7]** = Grøntved, Lundquist, Christensen, "Decentralized Multi-UAV Trajectory Task Allocation in Search and Rescue Applications", ICAR 2023, DOI 10.1109/icar58858.2023.10406912. Yazarların kabul edilmiş son taslağı, 8 sayfa; `~/makaleler/Grontved2023.pdf` (repoda değil).
@@ -504,7 +504,7 @@ A0 harita / Gazebo işaretçileri      → aynı kod; panelde "CBBA"
 | D2 | Ölçeklenebilirlik | 2–14 İHA, 2'şer adım | 972 → 229 s [G Fig. 4] |
 | D3 | Yakınsama | D2 ile aynı | [G Fig. 5] |
 | D4 | Paket kaybı | D1 koşulları + K7 | Makalede yok (katkı) |
-| D5 | İHA arızası, yeniden atama, lider kaybı | D1/D2 + olaylar (K8) | Makalede yok (katkı) |
+| D5 | İHA arızası, yeniden atama, lider kaybı | D1/D2 + olaylar (K8, K16) | Makalede yok (katkı) |
 | D6 | Gazebo gösterimi | AC10_0000, 5 İHA × 600 s | Makalede yok |
 
 ## C8. "MAKALEDE YOK" maddeleri — kararlar ve trajallocpy karşılaştırması
@@ -517,7 +517,7 @@ A0 harita / Gazebo işaretçileri      → aynı kod; panelde "CBBA"
 | K4 | Depot | ✅ Kod esas | Sınır kutusunda düzgün dağılım; alan dışı ve engel içi noktalar reddediliyor [T23 CoverageProblem.py:69-74]. Ortam başına 1 depot, bütün İHA'lar için ortak [T23 main.py:83-84]. Tohum: bütün çalışma için tek tohum, `random.seed(1352323)` [T23 main.py:126-128]; ortamlar sırayla aynı rastgele diziden. **Önerimden farkı:** ben ortam başına ayrı tohum önermiştim. D1 kodu taklit eder. 5 tohumlu duyarlılık analizi ek olarak kalır (test ayarı). |
 | K5 | `ω = 15` tanımı | ✅ Koddan | Bir İHA bir görevi demetinden ilk kaybedilen görev olarak `ω`'dan fazla kez kaybederse, o görev için artık teklif vermez [T23 CBBA.py:72, 238, 421-423]. Turner 2017 gerekmedi; tanım Turner'la ayrıca karşılaştırılmadı. **Önerimden farklı:** ben `ω`'yu kullanmamayı önermiştim. |
 | K6 | Senkron/asenkron, iterasyon | ✅ | Senkron: her turda bütün İHA'lar demet oluşturur → mesajlar toplanır → bütün İHA'lar uzlaşır. 1 tur = 1 iterasyon. Bütün İHA'lar o turda hiç görev kaybetmediyse yakınsamış sayılır [T23 Experiment.py:102-157, CBBA.py:431-436]. **Önerimle aynı.** |
-| K7 | Paket kaybı oranları | ⏳ **Kaynak doğrulanamadı — karar bekliyor** | Önerilen kaynak okundu: Sao, Ho, Bhore, Sujit, "Event Driven CBBA with Reduced Communication", arXiv:2509.06481 (2025), `~/makaleler/Sao2025_EventDrivenCBBA.pdf`. **Bu çalışmada paket kaybı deneyi yok; %10 ve %30 geçmiyor.** Paket kaybı yalnızca motivasyon olarak (§III, eşzamanlı yayında tıkanıklık → kayıp) ve gelecek çalışma olarak (§V, "bit errors and packet loss", NS-3) anılıyor. Deney düzeni (§IV): 100 m × 100 m alan, 10 m komşuluk eşiği (bağlı grafik), 5–50 İHA, demet boyu K = 1–8, yapılandırma başına 100 Monte Carlo; ölçüt: yayın (broadcast) sayısı (%52'ye kadar azalma). Şimdilik: %0 temel durum; %10, %30, %20, %50 **kaynak yok**. Oran başına 10 tohum: **test ayarı.** |
+| K7 | Paket kaybı oranları | ✅ **Onaylandı (25 Kasım 2026)** | **%0** (temel durum), **%10, %30** [Aznar 2026 §5.1, §6.4.2], **%50** [Liu 2026 §VI-F-1]. Metinden doğrulandı: Aznar 2026'da temel durum paket kaybı %0 (parametre tablosu, "Packet Loss Probability 0%"); senaryolar "probabilistic packet loss set at 10% and 30%, which also included bandwidth limitations" (§5.1) ve "packet loss (10% and 30%, with bandwidth limits)" (§6.4.2). Liu 2026'da "each delivery of a broadcast to one in-range receiver is dropped independently with probability p ∈ {0.1, 0.3, 0.5}" (§VI-F-1); sonuçlar %30 ve %50 için ayrıca verilmiş. **Kayıp modeli:** Liu 2026'daki tanım alınır: her mesajın her alıcıya teslimi bağımsız olarak `p` olasılıkla düşer. Aznar 2026 kaybı yalnızca "bir mesajın kaybolma olasılığı" olarak tanımlıyor ve bant genişliği sınırıyla birlikte uyguluyor; bant sınırı bizim deneyimizde **yok**, bu fark raporda belirtilir. **Bağlam farkı (sınırlılık):** iki çalışma da Grøntved'in senaryosundan farklı (Aznar: 20 yer robotu, SimPy, 3000 s, olay tetiklemeli CBBA; Liu: 10 İHA, 30 görev, 250 m iletişim yarıçapı, çevrimiçi atama). Oranlar "literatürde CBBA türevlerinde denenmiş kayıp düzeyleri" olarak alınır, sonuçlar doğrudan karşılaştırılmaz. Oran başına 10 tohum: **test ayarı.** Sao vd. 2025 bu karar için kaynak değil (paket kaybı deneyi yok); ilgili çalışma olarak C9'da. |
 | K8 | Lider | ✅ | Yalnızca izleme/raporlama; atama kararı vermez. Kayıpta en küçük kimlikli canlı İHA lider olur; D5'te atamanın etkilenmediği gösterilir. |
 | K9 | Yön bilgisi | ✅ | `reversed` alanı A0.0.5'e eklendi. |
 | K10 | DMG | ✅ | A2'de deneysel test; bozuluyorsa sınırlılık. |
@@ -526,6 +526,7 @@ A0 harita / Gazebo işaretçileri      → aynı kod; panelde "CBBA"
 | **K13** | Mesafe nasıl hesaplanacak | ✅ **Onaylandı** | Engellerden kaçınan en kısa yol, yazarlar gibi `extremitypathfinder` ile (pip; lisansı kurulumda kontrol edilecek). Engel %95 ve sınır %101 ölçeği de taklit edilir. **Gerekçe:** D1 karşılaştırması aynı maliyet modelini gerektirir. Alternatif: shapely + networkx ile kendi görünürlük grafiğimiz (daha çok iş, aynı sonucu verdiği ayrıca test edilmeli). |
 | **K14** | Kodun makale metninden ayrıldığı noktalar: (a) yön yalnızca önceki göreve göre seçiliyor, başa eklemede seçilmiyor; (b) depot dönüş terimi puan hesabının yalnızca bir tarafında; (c) kapasite eklemeden önce kontrol ediliyor | ✅ **Onaylandı: iki mod** |  **`paper_compat`** (D1–D3): T23'ün davranışını olduğu gibi uygular; makale ve sonuç dosyalarıyla karşılaştırma bununla yapılır. **`corrected`** (D4–D6): makale metnine (Eq. 8) göre her iki yön ve her ekleme yeri, iki puan hesabında aynı terimler, kapasite aşılmaz; iki mod arasındaki fark ayrıca raporlanır. **Gerekçe:** Makalenin yayımlanan sayıları T23 ile üretildi; projenin kendi deneyleri makale metnindeki tanıma uygun bir uygulamayla yapılmalı. |
 | **K15** | D1 kapasitesi | ✅ **Onaylandı** | Ana tablo **1200 s** (makale metni); ek olarak **1500 s** (sonuç dosyası). **Gerekçe:** C10'da gözlemlenen farkı açıkça göstermek. |
+| **K16** | İHA arıza olasılığı (D5) | ⏳ **Aday — karar bekliyor** | Aday kaynak: Aznar 2026 §5.1, §6.4.2: kalıcı ajan arızası "0.01% and 0.1% per step after an initial 500s grace period"; temel durum %0. **Sorun:** makalede "adım" (step) süresi tanımlı değil (SimPy ayrık olay simülasyonu, §5.1). Adım süresi bilinmeden olasılık bizim zaman birimimize çevrilemez. Ayrıca bu olasılıklar uçuş sırasındaki (yürütme) arızalar için; CBBA'nın atama aşamasında ise "adım" CBBA turudur ve süresi farklıdır. **Seçenekler:** (a) yazarlara/koda bakıp adım süresini doğrulamak; (b) olasılık yerine deterministik senaryo: belirli bir İHA belirli bir anda düşer (kaynak gerektirmez, yeniden atamayı göstermek için yeterli); (c) değerleri "adım = 1 s" varsayımıyla kullanmak — varsayım kaynaksız olduğu için yalnızca **test ayarı** olur. |
 
 ## C9. Kaynak notları
 
@@ -536,7 +537,11 @@ A0 harita / Gazebo işaretçileri      → aynı kod; panelde "CBBA"
   - Choi 2009: MIT DSpace 429 hatası verdi; kullanıcı tarayıcıdan İndirilenler'e indirecek, `~/makaleler/Choi2009.pdf` olarak kopyalanıp K1 doğrulanacak.
   - Turner 2017: K5 koddan çözüldüğü için şimdilik gerekmiyor.
   - Zeng 2019 ve Rodrigues 2021: A4'ten önce gerekli.
-  - Sao vd. 2025 (arXiv:2509.06481) okundu, `~/makaleler/Sao2025_EventDrivenCBBA.pdf`; paket kaybı oranı içermiyor (K7). K7 için başka bir kaynak gerekli.
+- **K7 ve K16 kaynakları** (arXiv'den indirildi, 25 Kasım 2026):
+  - **[Aznar 2026]** = Aznar, Pujol, Díez, "Event-Triggered Adaptive Consensus for Multi-Robot Task Allocation", arXiv:2604.06813 (v1, 2026), `~/makaleler/Aznar2026_EventTriggeredCBBA.pdf`.
+  - **[Liu 2026]** = Liu, Zhang, "CC-OPI: Online Distributed Task Allocation for UAV Swarms under Communication Constraints", arXiv:2609.19208 (v1, 2026), `~/makaleler/Liu2026_CCOPI.pdf`.
+  - İkisi de arXiv ön baskısı (hakem onayından geçmemiş olabilir); raporda bu belirtilir.
+- **İlgili çalışma (K7 kaynağı değil):** Sao, Ho, Bhore, Sujit, "Event Driven CBBA with Reduced Communication", arXiv:2509.06481 (2025), `~/makaleler/Sao2025_EventDrivenCBBA.pdf`. Olay tetiklemeli CBBA ile yayın sayısını %52'ye kadar azaltıyor (§IV: 100 m × 100 m, 5–50 İHA, 100 Monte Carlo). Paket kaybı deneyi yok; kayıp yalnızca motivasyon (§III) ve gelecek çalışma (§V) olarak geçiyor.
 
 ## C10. Gözlemlenen farklar: makale metni ve yazarların sonuç dosyaları
 
