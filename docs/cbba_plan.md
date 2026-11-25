@@ -1,6 +1,7 @@
 # CBBA Uygulama Planı
 
-> Durum: **A0 kararları alındı (24 Kasım 2026). Plan son onay bekliyor; onaydan sonra A0.8'deki sırayla kodlamaya başlanır.**
+> Durum: **A0 kararları alındı (24 Kasım 2026). A0.8 madde 1 (olay arayüzü) tamamlandı (`bf47850`, 25 Kasım 2026).**
+> **25 Kasım 2026 güncellemesi:** A0.1 panel tasarımı ve teknolojisi yeniden ele alındı (A0.1, A0.9 #1 ve #7 **onay bekliyor**, maket: `docs/design/panel_maket.html`). A7 (kişi tespiti) eklendi (**onay bekliyor**).
 > CLAUDE.md bölüm 14, kural 1: plan onaylanmadan kod yazılmaz.
 
 ---
@@ -22,7 +23,7 @@
 
 ### A0.0.1 Tasarım referansı ve kullanılmayacak öğeler
 
-**Referans:** `Downloads/Gazebo’da Sürü İHA Alan Taraması.png` ve `Downloads/Neon İHA Sürü Tarama Simülasyonu.png`. Bunlar yapay zekâ ile üretilmiş tasarım fikirleri; ikisi aynı fikrin sahne ve panel ağırlıklı versiyonları.
+**Referans:** `Downloads/Gazebo’da Sürü İHA Alan Taraması.png` **[R-G]**, `Downloads/Neon İHA Sürü Tarama Simülasyonu.png` **[R-N]** ve `Downloads/Gazebo + panel (temsili).pdf` **[R-P]**. İlk ikisi yapay zekâ ile üretilmiş tasarım fikirleri (aynı fikrin sahne ve panel ağırlıklı versiyonları); R-P, AC10_0000 geometrisiyle çizilmiş temsili bir görsel. Üçündeki sayılar örnektir, kullanılmaz. Panelin hangi özelliği hangi referanstan aldığı A0.1.1'deki tabloda.
 
 **Görsellerden alınacaklar:**
 - Koyu zemin üzerinde açık renkli sınır
@@ -140,6 +141,24 @@ Arayüz iki mesaj türünden oluşur. Her ikisi de JSON'dur ve yerel UDP ile (`1
 - Atamada olmayan bir görev için olay gelirse uyarı yazılır, ama ekranda yine gösterilir (gerçekte ne olduysa o görünür).
 - Konum, hız ve irtifa bu arayüzden **gelmez**; doğrudan PX4 telemetrisinden okunur (A0.0.3). Arayüz yalnızca telemetride olmayan bilgiyi taşır: atama ve görev durumu.
 
+**3) A7 için planlanan olaylar** (⏳ **henüz kodda yok**; `mission_events.py` A7 entegrasyonuna kadar değişmez, A7 bölümü):
+
+```json
+{ "type": "event", "time": 1795515301.20, "uav": 2, "event": "person_detected",
+  "x": 41.5, "y": 63.0, "confidence": 0.91, "model": "resnet50_heridal_v1",
+  "image": "heridal/patches/test/pos_000123.png" }
+{ "type": "event", "time": 1795515301.25, "uav": 2, "event": "confirm_task_created",
+  "task": 1001, "x": 41.5, "y": 63.0, "source_event_uav": 2 }
+```
+
+| `event` | Anlamı | Alanlar |
+|---|---|---|
+| `person_detected` | İHA'nın taradığı hücrede sensör modeli (A7) pozitif karar verdi | `x`, `y` (veri seti metre, hücre merkezi), `confidence` (0–1), `model` (model adı/sürümü), `image` (**isteğe bağlı**, modele verilen parçanın yolu). `task` alanı yok. |
+| `confirm_task_created` | Tespit noktası için bir **doğrulama görevi** (nokta görev) oluşturuldu; CBBA'ya dinamik görev olarak eklenecek (A5 mekanizması) | `task` (yeni görev kimliği; veri seti görevleriyle çakışmasın diye 1000'den başlar — **arayüz ayarı**), `x`, `y`, `source_event_uav` |
+
+- Doğrulama görevinin atanması ayrı bir olay değildir: yeni bir `assignment` mesajıyla gelir (yeni atama öncekinin yerine geçer, kural yukarıda). Doğrulama görevinin uçuşu da aynı `task_started`/`task_finished` olaylarını kullanır.
+- Panelde: `person_detected` → haritada işaret + "Tespitler" kartında satır; `confirm_task_created` → haritada nokta görev simgesi.
+
 **Kim gönderir:**
 
 | Dönem | `assignment` | Olaylar |
@@ -158,51 +177,115 @@ Arayüz iki mesaj türünden oluşur. Her ikisi de JSON'dur ve yerel UDP ile (`1
 
 ### A0.1 — Canlı 2D harita ve bilgi paneli · **CBBA öncesi**
 
-**Mekanizma:** Gazebo'dan bağımsız ayrı bir masaüstü penceresi (WSLg).
+> **25 Kasım 2026: yeniden tasarlandı, onay bekliyor.** Önceki karar (matplotlib + Tk penceresi, A0.9 #1) bu bölümün sonundaki teknoloji değerlendirmesi nedeniyle **değişiklik önerisi** durumunda. Uçuş kodu ve `mission_events.py` arayüzü bu değişiklikten etkilenmez.
 
-**Kütüphaneler:**
-- `matplotlib` 3.11 (venv'de var) + `TkAgg`. **Kurulum (kullanıcı):** `sudo apt install python3-tk`.
-- `mavsdk` 4.2 (venv'de var): 14550'de pasif bağlantı, `get_systems()` ile iki İHA.
-- Standart kütüphane: `asyncio`, `socket`, `json`, `threading`.
+**Amaç:** Basit bir test arayüzü değil, mühendislik izleme paneli: tek bakışta senaryo, atama kaynağı, İHA durumları, görev ilerlemesi ve fiziksel kapsama. Panel **yalnızca izler**, İHA'ya komut göndermez.
 
-**Gösterilecekler** (hepsi gerçek veriden):
-- **Veri setinden:** alan sınırı, 10 engel (0,5 m içeri küçültülmüş hali, A0.2 ile aynı), 107 tarama şeridi.
-- **Telemetriden:** İHA konumu (enlem/boylam → dünya ENU metre), yön oku (hız vektörü), son N saniyelik iz.
-- **Panel, her İHA için:** Sistem ID, hız, irtifa, uçuş modu, aktif görev.
-- **Atamadan:** her İHA'ya atanmış şeritler İHA'nın renginde ince çizgiyle.
-- **Görev olaylarından:** aktif şerit kalın, tamamlanan şerit yeşil; tamamlanan/toplam görev ve ilerleme çubuğu (**görev tamamlama oranı**).
-- **Atama kaynağı etiketi:** `source` alanından: "Manuel atama" veya "CBBA" (A0.0.5).
-- Renk açıklamaları, metre ölçek çubuğu, kuzey oku, koyu tema.
+**Tasarım maketi:** `docs/design/panel_maket.html`
+- Gerçek AC10_0000 geometrisi (sınır, 10 engel, 107 şerit; `swarm_core.dataset` ile okunup sayfaya gömüldü).
+- Atama, ilerleme, hız/irtifa, süre, zaman çizelgesi ve olay günlüğü **örnek** değerler, sayfada "ÖRNEK" etiketli. Örnek atama: şerit orta noktası y ≥ 50 → İHA-1 (58 görev), değilse İHA-2 (49 görev), şeritler y'ye göre sıralı, veri setindeki yönde; **yalnızca maket için**.
+- **Örnek animasyon** ("ÖRNEK ANİMASYON" etiketli): İHA'lar ortak kalkış noktasından (0,0) şeritleri sırayla tarar. Hareket hız rampası modeliyle (v_max 3 m/s, a_max 1 m/s², her ayakta tam duruş; CLAUDE.md §13) hesaplanır; engellerden kaçınma yok (`fly_task.py` gibi). Oynat/duraklat, başa sar, ×5–×40 hız ve zaman çubuğu yalnızca maketi etkiler. Adres sonuna `?t=640` eklenirse animasyon o saniyede durmuş açılır.
+- **Hareketin anlaşılırlığı (öncelikli hedef):** İHA simgesi + yön oku (hareket yönü), İHA renginde son 60 s'lik iz (eskiden yeniye solar), aktif şerit İHA renginde kalın ve parlak, sıradaki şerit İHA renginde kesik, biten şerit yeşile döner ve 3 m tarama izi belirir; sayaçlar, oranlar, grafik ve olay günlüğü aynı anda ilerler.
+- Dış kütüphane ve ağ bağlantısı yok; dosyayı tarayıcıda açmak yeterli. Windows'ta: `\\wsl$\Ubuntu-24.04\home\sevval\suruiha\docs\design\panel_maket.html` (ya da WSL'de `explorer.exe docs/design/panel_maket.html`).
 
-**Dosyalar:**
-- **Yeni:**
-  - `swarm_viz/__init__.py`, `swarm_viz/viz_config.py`
-  - `swarm_viz/geo.py` (enlem/boylam ↔ dünya metre)
-  - `swarm_viz/assignment.py` (A0.0.5)
-  - `swarm_viz/mission_state.py` (olaylardan görev durumu; saf Python)
-  - `swarm_viz/live_map.py` (pencere + telemetri)
-  - `swarm_sim/mission_events.py` (A0.0.5 arayüzünün gönderen tarafı: `assignment` ve `task_started`, `task_finished`, `takeoff`, `landed` olayları; hata olursa sessizce geçer)
-- **Değişecek:** `swarm_sim/fly_task.py` (başlarken `assignment` (`source: "manual"`), görevlerde `task_started`/`task_finished`; uçuş davranışı değişmez).
-- **Testler:** `tests/test_geo.py`, `tests/test_assignment.py`, `tests/test_mission_state.py`, `tests/test_live_map_smoke.py` (pencere açmadan `Agg` ile bir kare çizer).
+#### A0.1.1 Özellik tablosu
 
-**CBBA öncesi demo:**
-- Tek İHA görev uçuşu: `fly_task.py`, AC10_0000, görev 1–4, atama `{"1": [1,2,3,4]}`, kaynak `manual`.
-- İki İHA'nın haritada aynı anda görünmesi: `multi_takeoff_land.py`.
+Referanslar: **R-G** = Gazebo'da Sürü İHA Alan Taraması.png, **R-N** = Neon İHA Sürü Tarama Simülasyonu.png, **R-P** = Gazebo + panel (temsili).pdf (A0.0.1).
+Veri kaynağı: **telemetri** = PX4 (UDP 14550), **olay** = A0.0.5 arayüzü (UDP 15600), **veri seti** = `scenarios/*.json`, **henüz yok** = kaynağı olan bir modül henüz yazılmadı.
 
-İki İHA'ya elle görev verilen uçuş CBBA sonrasına ertelendi (A0.7).
+| # | Özellik | Referans | Veri kaynağı | Karar | Neden / not |
+|---|---|---|---|---|---|
+| 1 | Başlık + bağlantı rozetleri (telemetri, olay akışı) | R-N ("Simülasyon Çalışıyor"), R-G | telemetri, olay (son mesajın yaşı) | **Şimdi** | R-N'deki tek "çalışıyor" rozeti yerine iki kaynak ayrı gösterilir: hangisinin koptuğu görünür. |
+| 2 | Üst sekmeler | R-N | — | **Şimdi** (yalnız "Canlı izleme" etkin) | Görevler, İHA'lar: sonra; Atama/CBBA: A1 sonrası; Tespitler: A7; Deneyler: A3 sonrası. Etkin olmayan sekmeler "sonra" etiketiyle görünür. |
+| 3 | Senaryo bilgi kartı (ortam, alan, engel, görev, toplam şerit uzunluğu, 3 m, v_max/a_max) | R-N ("Senaryo") | veri seti; v/a CLAUDE.md §13 | **Şimdi** | Bütün sayılar dosyadan hesaplanır; her değerin kaynağı kartın altında yazar. |
+| 4 | Senaryo ve algoritma seçme listeleri | R-N | — | **Çıkarıldı** | İzleme paneli; senaryo uçuş betiğinden gelir. Algoritma seçilmez, kaynağı etiketlenir (#5). |
+| 5 | Atama kaynağı etiketi (Manuel atama / CBBA) | R-P ("Atama: Manuel atama") | olay (`assignment.source`) | **Şimdi** | A0.0.5 kuralı: elle atama hiçbir zaman CBBA gibi gösterilmez. |
+| 6 | İHA kartı: renk, ad, Sistem ID | R-G, R-N, R-P | telemetri | **Şimdi** | — |
+| 7 | İHA durum rozeti (Bağlantı yok / Yerde / Havada / Görevde) | R-N ("Görevde") | telemetri (`armed`, `in_air`, son mesaj yaşı) + olay (`task_started`) | **Şimdi** | Kurallar `mission_state.py`'de, birim testli. |
+| 8 | Hız, irtifa | R-G, R-N, R-P | telemetri | **Şimdi** | — |
+| 9 | Uçuş modu | — (A0.1 ilk planı) | telemetri | **Şimdi** | OFFBOARD/HOLD/LAND ayrımı hata ayıklamada gerekli. |
+| 10 | Aktif görev | R-G, R-N, R-P | olay | **Şimdi** | Biçim `#görev_no`. R-G/R-N'deki "27 / 161" biçimi anlamsız (görev no / toplam). |
+| 11 | Tamamlanan / atanan (İHA başına) + çubuk | R-N, R-P | olay + atama | **Şimdi** | — |
+| 12 | Pil / enerji | R-G, R-N | **henüz yok** | **Sonra (A4)** | Enerji modeli yok; kartta "— A4" yazar, uydurma yüzde gösterilmez. |
+| 13 | İHA fotoğrafı | R-N | — | **Çıkarıldı** | Bilgi taşımıyor, yer kaplıyor. |
+| 14 | **Görev tamamlama oranı** | R-G, R-N, R-P | olay | **Şimdi** | tamamlanan görev ÷ toplam görev. |
+| 15 | **Fiziksel kapsama oranı** (ayrı kart) | R-N ("Alan Kapsama"); formül bizim | olay + veri seti (şerit uzunlukları) | **Şimdi** | Tanım ve sınırları A0.6'da. Formül kartta açıkça yazılı, iki oran yan yana ama ayrı kartlarda; karıştırılmaz. |
+| 16 | Kapsama zaman çizelgesi | R-N | olay zaman damgaları | **Şimdi** | İki seri (görev tamamlama, fiziksel kapsama) + senaryonun kapsama üst sınırı çizgisi (AC10_0000: %96,2). |
+| 17 | Anlık metrik kutuları (ort. hız, toplam süre, kapsama, enerji) | R-N | telemetri, olay; enerji henüz yok | **Kısmen** | Geçen süre üst çubukta. Ortalama hız gibi metrikler A5 metrik tanımlarından sonra (C7, Aşama 5); enerji A4. |
+| 18 | Ana 2D harita: sınır, engeller, şeritler, durum renkleri | R-G, R-N, R-P (3D sahne) | veri seti + olay | **Şimdi** | Panel 2D üstten görünüm; 3D sahne Gazebo'nun işi (A0.2–A0.4). |
+| 19 | 3 m tarama izi (tamamlanan şeridin genişliği) | R-G ("Tarama alanı 3 m"), R-P ("Taranan şerit 3 m") | veri seti (3 m) + olay | **Şimdi** (katman) | Fiziksel kapsamanın haritadaki karşılığı. |
+| 20 | Uçulan iz | R-G, R-N, R-P | telemetri | **Şimdi** (katman) | İHA renginde, son N saniye (maket: 60 s), eskiden yeniye solar; N görselleştirme ayarı. Uzun iz biten şeritlerin yeşilini örttüğü için kısa tutulur. |
+| 21 | Planlanan rota (kesik çizgi) | R-N, R-P | atama (+ `reversed`) | **Şimdi** (katman) | — |
+| 22 | Yön oku | R-G | telemetri (hız vektörü) | **Şimdi** | İHA simgesine bağlı; dururken son hareket yönünü gösterir. |
+| 22b | Aktif şerit vurgusu / sıradaki şerit / biten şeridin renk değiştirmesi | R-G, R-N, R-P | olay | **Şimdi** | Aktif: İHA renginde kalın + parlama; sıradaki (şerit başına giderken): İHA renginde kesik; biten: yeşil + 3 m izi. |
+| 23 | Ölçek çubuğu, kuzey oku, metre eksenleri, kalkış noktası | R-G, R-N, R-P | veri seti | **Şimdi** | — |
+| 24 | Katman aç/kapa düğmeleri | — (bizim) | — | **Şimdi** | Yalnızca görünümü değiştirir; İHA'ya hiçbir şey gönderilmez. |
+| 25 | Mini harita | R-G, R-N, R-P | atama | **Şimdi**, **atama görünümü** olarak | Ana harita zaten bütün alanı gösterdiği için mini harita aynısını tekrar etmez: şeritleri **atandığı İHA'nın rengiyle** (sahiplik) gösterir. CBBA/yeniden atama sonrası dağılım tek bakışta görülür. |
+| 26 | Lejant | R-G, R-N, R-P | — | **Şimdi** | — |
+| 27 | Olay günlüğü | — (bizim) | olay | **Şimdi** | Son olaylar zaman damgasıyla; deney sırasında neyin ne zaman olduğu görülür. |
+| 28 | Tespitler kartı | — (A7) | **henüz yok** (`person_detected`) | **Boş kart, A7'de dolar** | — |
+| 29 | Kaynak notu | R-P | — | **Şimdi** | Geometri ve parametrelerin kaynağı panelde yazar. |
+| 30 | "Temsili / örnek" uyarısı | R-P | — | **Yalnızca makette** | Canlı panelde yerine bağlantı rozetleri (#1) var. |
+| 31 | Durdur / Sıfırla / Ayarlar düğmeleri | R-N | — | **Çıkarıldı** | **Güvenlik:** panel İHA'ya komut göndermez; uçuşu yalnızca uçuş betiği yönetir. |
+| 32 | Simülasyon hızı seçici (x1.0) | R-G | — | **Çıkarıldı** | Gazebo'nun işi. Ölçülen RTF A0.5'ten sonra salt okunur rozet olarak eklenebilir. |
+| 33 | 3D perspektif sahne, binalar, ağaçlar, helipad, neon ışık | R-G, R-N | — | **Panelde yok** | 3D görünüm Gazebo'da (A0.2–A0.4); dekor "Daha sonra" listesinde. |
 
-**Ortak koordinat sistemi:** Harita konumları GPS'ten (enlem/boylam) dünya başlangıcına göre metreye çevirir; dünya başlangıcı PX4 dünyasındaki `spherical_coordinates` (47.397971057728974, 8.546163739800146). Veri seti (0,0) = dünya (0,0); x doğu, y kuzey.
+#### A0.1.2 Teknoloji değerlendirmesi
 
-**Zorluk / süre:** Orta. **≈ 3 iş günü.**
-- Olay modülü + `fly_task` değişikliği: 0,5
+**Tk + matplotlib bu görünümü verebilir mi?** Haritayı (çizgiler, çokgenler, iz) verebilir. Paneli **maketteki kalitede vermesi zor**:
+- Kartlar, yuvarlatılmış köşeler, durum rozetleri, sekmeler, tipografi ve esnek yerleşim Tk'de elle çizim ya da ek kütüphane (ör. CustomTkinter) gerektirir; sonuç yine "masaüstü test aracı" gibi görünür.
+- matplotlib'in WSLg'de canlı güncellemesi A0.1'in ilk planında zaten risk olarak yazılmıştı (hedef 5 Hz).
+- Qt (PySide6) görünümü verebilir ama ağır bir bağımlılık ve yeni bir çerçeve öğrenmek demek.
+
+**Öneri: tarayıcıda açılan yerel web paneli.**
+
+```text
+PX4 -i 0..n ── MAVLink UDP 14550 ──┐
+fly_task.py ── mission_events UDP 15600 ──┤
+                                          ▼
+              swarm_viz/server.py  (Python, asyncio + aiohttp)
+              - 14550: MAVSDK pasif bağlantı (konum, hız, irtifa, mod, armed/in_air)
+              - 15600: olay alıcısı → assignment.py + mission_state.py (saf Python, test edilir)
+              - Birleşik durumu 5 Hz'de WebSocket ile yayınlar
+              - Statik dosyaları sunar: http://localhost:8765
+                                          ▼
+              Tarayıcı (Windows'ta Chrome/Edge): swarm_viz/web/ (HTML + CSS + JS, SVG harita)
+```
+
+| | Tk + matplotlib | **Yerel web paneli (öneri)** |
+|---|---|---|
+| Görünüm | Harita iyi, panel sınırlı | Maketteki görünüm doğrudan (maket zaten HTML) |
+| Ek kütüphane | `python3-tk` (apt) | `aiohttp` (pip, tek paket; HTTP + WebSocket). Ön yüzde kütüphane yok: düz JS + SVG, CDN yok, çevrimdışı çalışır. |
+| Canlı güncelleme | WSLg + matplotlib yeniden çizimi (risk) | Tarayıcı SVG'yi kendisi çizer; 5 Hz rahat |
+| Test | `Agg` ile çizim testi | Sunucu ve durum mantığı `pytest`; sayfa için başsız Chrome ekran görüntüsü (bu maket de böyle kontrol edildi) |
+| Yeni öğrenilecek | Az | WebSocket ve biraz JS (bilgisayar mühendisliği müfredatında tanıdık) |
+| Sunum / rapor | Pencere ekran görüntüsü | Aynı sayfa sunumda açılabilir; ekran görüntüsü kolay |
+| Risk | WSLg hızı | WSL2 → Windows `localhost` yönlendirmesi (WSL2'de varsayılan açık; çalışmazsa WSL IP'si kullanılır). 14550 tek süreç kuralı aynı. |
+
+- **Uçuş kodu ve `mission_events.py` değişmez:** sunucu, A0.0.5 arayüzünün dinleyen tarafıdır.
+- **Katman ayrımı korunur:** `swarm_viz/` `swarm_core` ve `swarm_sim`'i okuyabilir; tersi olmaz. `aiohttp` yalnızca `swarm_viz`'de.
+- "Daha sonra" listesindeki React + FastAPI önerisinin hafif hâli: derleme adımı ve Node.js yok.
+
+**Dosyalar (öneri onaylanırsa):**
+- **Yeni:** `swarm_viz/__init__.py`, `viz_config.py`, `geo.py`, `assignment.py`, `mission_state.py` (yukarıdaki planla aynı), `swarm_viz/server.py` (UDP + MAVSDK + WebSocket + statik dosya), `swarm_viz/web/index.html`, `panel.css`, `panel.js` (maketten türetilir).
+- **Değişmeyecek:** `swarm_sim/fly_task.py`, `swarm_sim/mission_events.py`.
+- **Testler:** `tests/test_geo.py`, `test_assignment.py`, `test_mission_state.py` (durum rozeti kuralları ve iki oran dahil), `tests/test_viz_server.py` (sahte UDP olayı → WebSocket'ten beklenen durum; `aiohttp` test istemcisi).
+
+**CBBA öncesi demo** (değişmedi): `fly_task.py` AC10_0000 görev 1–4 (`manual`); iki İHA'nın aynı anda görünmesi için `multi_takeoff_land.py`.
+
+**Ortak koordinat sistemi** (değişmedi): Harita konumları GPS'ten (enlem/boylam) dünya başlangıcına göre metreye çevirir; dünya başlangıcı PX4 dünyasındaki `spherical_coordinates` (47.397971057728974, 8.546163739800146). Veri seti (0,0) = dünya (0,0); x doğu, y kuzey.
+
+**Zorluk / süre:** Orta. **≈ 4 iş günü** (önceki Tk planı ≈ 3 gündü; fark ≈ +1 gün).
+- Olay modülü + `fly_task` değişikliği: 0,5 — ✅ tamamlandı (`bf47850`)
 - Atama + görev durumu + coğrafi yardımcılar ve testleri: 1
-- Harita/panel: 1,5
+- Sunucu (UDP + MAVSDK + WebSocket) ve testi: 1
+- Sayfa (maketten canlı veriye): 1,5
 
 **Riskler:**
-- WSLg'de matplotlib canlı güncelleme hızı. Hedef 5 Hz; yetmezse iz kısaltılır.
 - 14550'yi aynı anda tek süreç dinleyebilir; QGroundControl açıksa çakışır.
 - MAVSDK'nin tek bağlantıda iki sistemi ayırması bu projede henüz denenmedi. İlk iş kısa bir deneme.
 - GPS tabanlı konum gürültülü olabilir. Görünür bir sapma olursa yerel konum + bilinen kalkış noktası kullanılır.
+- WSL2 → Windows tarayıcı erişimi (`localhost:8765`) bu makinede henüz denenmedi.
 
 ---
 
@@ -290,14 +373,19 @@ Mevcut yöntem (`make px4_sitl gz_x500` ve `default` dünya) hiç değişmeden �
 
 ### A0.6 — Metriklerin karıştırılmaması
 
-- **Görev tamamlama oranı** = tamamlanan görev / toplam görev. Görev olaylarından gelir. A0'da panelde **yalnızca bu** gösterilir.
-- **Fiziksel alan kapsama oranı:** uçulan izin 3 m tarama alanının, engel dışındaki alana oranı (`shapely`). Tanım A5 metrikleriyle birlikte yapılacak. **A0'da gösterilmeyecek.**
+- **Görev tamamlama oranı** = tamamlanan görev / toplam görev. Görev olaylarından gelir.
+- **Fiziksel kapsama oranı (yaklaşık, panel için)** — *25 Kasım 2026 kararıyla A0'da ayrı kartta gösterilir* (A0.1.1 #15):
+  `Σ (task_finished olayı gelmiş şeritlerin uzunluğu) × 3 m ÷ sınır alanı`
+  - 3 m: CoverageTasks README ("sweep-width of 3 meters"). Sınır alanı veri setinden (AC10_0000: 10.000 m²).
+  - **Sınırlar:** şerit uçlarındaki örtüşme ve engel alanı düşülmez; yarım kalan şerit sayılmaz. AC10_0000'da toplam şerit uzunluğu 3.206,4 m olduğundan bütün görevler bitince değer **%96,2**'de kalır (%100 olmaz). Payda engel dışı alan (8.577,2 m²) alınsaydı %112,1 çıkardı; bu yüzden payda bilerek sınır alanıdır. Panelde "yaklaşık" yazar ve üst sınır gösterilir.
+  - Hesap yeri: `swarm_viz/mission_state.py` (saf Python, birim testli).
+- **Kesin fiziksel kapsama** (uçulan gerçek izin 3 m genişlikteki tamponunun, engel dışı alanla kesişimi; `shapely`): deney metriği olarak A5 metrik tanımlarıyla birlikte yapılacak. Panel değeri deney sonucu olarak raporlanmaz.
 
 ### A0.7 — CBBA öncesi / sonrası
 
 | Özellik | Ne zaman | Süre |
 |---|---|---|
-| 2D canlı harita + panel (atama girdisi, görev olayları dahil) | **CBBA öncesi** | ≈ 3 gün |
+| 2D canlı harita + panel (atama girdisi, görev olayları dahil) — yerel web paneli önerisiyle (A0.1.2) | **CBBA öncesi** | ≈ 4 gün (olay arayüzü ✅) |
 | Temel Gazebo dünyası (ızgara, sınır, şeritler, 1 m engeller) | **CBBA öncesi** | ≈ 2–2,5 gün |
 | Sabit kamera | **CBBA öncesi** | ≈ 0,5 gün |
 | Performans ölçümü (temel) | **CBBA öncesi** | ≈ 0,5 gün |
@@ -311,7 +399,7 @@ Mevcut yöntem (`make px4_sitl gz_x500` ve `default` dünya) hiç değişmeden �
 
 1. `feat(viz): assignment and mission event interface` (`mission_events.py` + `fly_task.py` olayları) + test + tek İHA uçuşuyla doğrulama
 2. `feat(viz): assignment parsing, mission state and geo helpers` + testler
-3. `feat(viz): live 2D map and panel` + `Agg` çizim testi + uçuş sırasında elle doğrulama
+3. `feat(viz): live web panel (server + page)` + sunucu testi + başsız tarayıcı ekran görüntüsü + uçuş sırasında elle doğrulama (A0.1.2 onaylanırsa; onaylanmazsa eski Tk planı)
 4. `chore: ignore generated worlds` (`.gitignore`: `worlds/*.sdf`)
 5. `feat(viz): GeoJSON to SDF world generator with 0.5 m obstacle inset` + XML testi
 6. `feat(viz): fixed camera GUI config` (elle doğrulama)
@@ -323,19 +411,20 @@ Her commit'ten önce `pytest`; uçuşa dokunan değişikliklerden sonra simülas
 
 | # | Karar | Durum |
 |---|---|---|
-| 1 | 2D pencere: matplotlib + Tk. `python3-tk` kullanıcı tarafından kurulacak. | ✅ Karar verildi |
+| 1 | 2D pencere: matplotlib + Tk. `python3-tk` kullanıcı tarafından kurulacak. | ⏳ **Değişiklik önerildi (25 Kasım 2026):** yerel web paneli (`aiohttp` + HTML/CSS/JS), A0.1.2. Onay bekliyor. |
 | 2 | Engel görsel yüksekliği 1,0 m, "görselleştirme ayarı" olarak işaretli. | ✅ Karar verildi |
 | 3 | Yalnızca üretici betik commit edilir; `worlds/*.sdf` `.gitignore`'da. | ✅ Karar verildi |
 | 4 | CBBA öncesi: 2D harita + panel, temel dünya, sabit kamera, performans ölçümü. Gerisi sonraya. | ✅ Karar verildi |
 | 5 | 23 görev konusu risk değil: şeritler engel kenarları boyunca; engeller 0,5 m içeriden çizilir. | ✅ Karar verildi, doğrulandı |
 | 6 | Görselleştirme, görev atamasını (`{iha_id: [görev_id sırası]}`) ve görev başladı/bitti olaylarını genel bir arayüzden alır (A0.0.5). Elle verilen atama "Manuel atama", CBBA çıktısı "CBBA" olarak etiketlenir; CBBA eklendiğinde görselleştirme kodu değişmez. | ✅ Karar verildi |
+| 7 | Panel özellikleri A0.1.1 tablosundaki gibi; görev tamamlama ve fiziksel kapsama (yaklaşık, A0.6) ayrı kartlarda; panel İHA'ya komut göndermez; pil A4'e kadar boş. | ⏳ Onay bekliyor (maket: `docs/design/panel_maket.html`) |
 
 ### Daha sonra (isteğe bağlı, A0 kapsamı dışında)
 
 - x500 modellerine farklı renklerde LED (model SDF'ini kopyalayıp renk ekleme; PX4 modeli değiştirilmez).
 - Neon benzeri ışıklı rota efektleri.
 - Gerçekçi arazi dokuları; ağaçlar yalnızca alan dışında, dekor olarak.
-- React + FastAPI + WebSocket kontrol paneli.
+- ~~React + FastAPI + WebSocket kontrol paneli.~~ Hafif hâli A0.1.2'de öneriliyor (izleme paneli; kontrol yok).
 - A4 enerji modelinden sonra pil ve enerji göstergeleri.
 
 ---
@@ -459,6 +548,7 @@ S_i^{p_i} = Σ_{j ∈ p_i}  λ^{τ_ij(p_i)} · c̄_j                            
 | **A4** Enerji modeli | Zeng vd. 2019 güç modeli; Rodrigues vd. 2021 verisiyle kontrol | **Sınırlılık:** Rodrigues verisindeki araç x500 değil (kullanıcı notu); model adı ve özellikleri Rodrigues 2021'den doğrulanacak. İki kaynak henüz okunmadı. |
 | **A5** Dayanıklılık | Paket kaybı (D4), İHA arızası ve yeniden atama, lider kaybı (D5) | Makalede gelecek çalışma olarak geçiyor [G §VI] |
 | **A6** Gazebo | CBBA → A0 arayüzü (`source: "cbba"`, `reversed`) → uçuş (D6) | 5 İHA (WSL yetmezse 2 veya 4) |
+| **A7** Kişi tespiti (sensör modeli) | HERIDAL; ResNet/DenseNet/ViT transfer öğrenme karşılaştırması; Grad-CAM; veri setine dayalı sensör simülasyonu; doğrulama görevi (A7 bölümü) | Sınıflandırma metrikleri raporlandı; simülasyonda `person_detected` → doğrulama görevi → CBBA ile atandı ve uçuldu. **Entegrasyon A3'ten sonra; eğitim yan hat.** |
 
 ## C6. Dosyalar ve mevcut kodla bağlantı
 
@@ -478,7 +568,7 @@ S_i^{p_i} = Σ_{j ∈ p_i}  λ^{τ_ij(p_i)} · c̄_j                            
 
 **Mevcut koddan kullanılacaklar:**
 - `swarm_core/dataset.py` (`load_tasks`, `load_boundary`, `load_obstacles`) değişmez.
-- `swarm_core/models.py`: `Task` ve `UAV` (başlangıç konumu) kullanılır. `UAV.battery` ve `UAV.is_leader` silinmez. CBBA'nın iç durumu `cbba.py` içinde tutulur.
+- `swarm_core/models.py`: `Task` ve `UAV` (başlangıç konumu) kullanılır. `UAV.battery` ve `UAV.is_leader` silinmez. CBBA'nın iç durumu `cbba.py` içinde tutulur. A7'de `Task`'a `kind` alanı (`"sweep"` / `"confirm"`, varsayılan `"sweep"`) eklenmesi planlandı (A7.4).
 - `swarm_core/tasks.py` ve `coverage.py`: CBBA kullanmaz; legacy olarak işaretlenecek (kural 3).
 
 **A0 arayüzüne bağlantı:**
@@ -527,6 +617,7 @@ A0 harita / Gazebo işaretçileri      → aynı kod; panelde "CBBA"
 | **K14** | Kodun makale metninden ayrıldığı noktalar: (a) yön yalnızca önceki göreve göre seçiliyor, başa eklemede seçilmiyor; (b) depot dönüş terimi puan hesabının yalnızca bir tarafında; (c) kapasite eklemeden önce kontrol ediliyor | ✅ **Onaylandı: iki mod** |  **`paper_compat`** (D1–D3): T23'ün davranışını olduğu gibi uygular; makale ve sonuç dosyalarıyla karşılaştırma bununla yapılır. **`corrected`** (D4–D6): makale metnine (Eq. 8) göre her iki yön ve her ekleme yeri, iki puan hesabında aynı terimler, kapasite aşılmaz; iki mod arasındaki fark ayrıca raporlanır. **Gerekçe:** Makalenin yayımlanan sayıları T23 ile üretildi; projenin kendi deneyleri makale metnindeki tanıma uygun bir uygulamayla yapılmalı. |
 | **K15** | D1 kapasitesi | ✅ **Onaylandı** | Ana tablo **1200 s** (makale metni); ek olarak **1500 s** (sonuç dosyası). **Gerekçe:** C10'da gözlemlenen farkı açıkça göstermek. |
 | **K16** | İHA arızası (D5) | ✅ **Onaylandı (25 Kasım 2026): belirlenmiş senaryo.** ⚠️ **Deney tasarımı — kaynak değil, bizim seçimimiz.** | **Arıza anı:** kapasitenin (`L_t`) **%25, %50, %75**'i (erken / orta / geç arıza). Kapasiteye oransal olduğu için D2'deki farklı `L_t` değerlerinde (1500/750/600/500 s) karşılaştırılabilir. **Düşen İHA:** (1) **en etkili durum:** arıza anında en çok kalan görevi olan İHA (kalan görev = yolunda olup henüz başlanmamış görevler; eşitlikte küçük kimlik, K1/K8 ile tutarlı — bu eşitlik kuralı da bizim seçimimiz); (2) **rastgele seçilen İHA**, 10 tohum: **test ayarı.** Olasılıklı arıza modeli kullanılmıyor; Aznar 2026'nın olasılıkları (adım süresi tanımsız) kullanılmadı, yalnızca C9'da ilgili çalışma olarak anılıyor. |
+| **K17** | Doğrulama görevinin ödülü ve bekleme süresi (A7) | ⏳ Açık | Tarama görevlerinde `c̄_j = 1` (K3). Doğrulama görevi için kaynak aranacak; bulunamazsa deney tasarımı olarak işaretlenir. |
 
 ## C9. Kaynak notları
 
@@ -543,6 +634,13 @@ A0 harita / Gazebo işaretçileri      → aynı kod; panelde "CBBA"
   - İkisi de arXiv ön baskısı (hakem onayından geçmemiş olabilir); raporda bu belirtilir.
 - **İlgili çalışma (arıza, K16 kaynağı değil):** Aznar 2026 kalıcı ajan arızasını olasılıklı modelliyor: "0.01% and 0.1% per step after an initial 500s grace period" (§5.1, §6.4.2). "Adım" süresi tanımlı değil (SimPy ayrık olay simülasyonu) ve 500 s bekleme bizim kapasitelerimizle (500–1500 s) uyumsuz; bu yüzden D5'te kullanılmadı.
 - **İlgili çalışma (K7 kaynağı değil):** Sao, Ho, Bhore, Sujit, "Event Driven CBBA with Reduced Communication", arXiv:2509.06481 (2025), `~/makaleler/Sao2025_EventDrivenCBBA.pdf`. Olay tetiklemeli CBBA ile yayın sayısını %52'ye kadar azaltıyor (§IV: 100 m × 100 m, 5–50 İHA, 100 Monte Carlo). Paket kaybı deneyi yok; kayıp yalnızca motivasyon (§III) ve gelecek çalışma (§V) olarak geçiyor.
+
+- **A7 kaynakları** (25 Kasım 2026 web araması; PDF'ler henüz indirilmedi):
+  - **[HERIDAL]** Božić-Štulić, Marušić, Gotovac, IJCV 127(9):1256–1278, 2019, DOI 10.1007/s11263-019-01177-1 (dblp + Springer).
+  - Pyrrö (Aalto), Zenodo DOI 10.5281/zenodo.5662351 (HERIDAL türevi, CC BY 3.0).
+  - Pyrrö vd., arXiv:2111.09406 (2021) — etiket sayıları.
+  - Gotovac vd., *Remote Sensing* 12(20):3295 (2020) — parça sayısı.
+  - IPSAR sayfası okunamadı (ECONNRESET); lisans A7.1'de açık.
 
 ## C10. Gözlemlenen farklar: makale metni ve yazarların sonuç dosyaları
 
@@ -564,3 +662,92 @@ Yazarların sonuç dosyaları (`benchmarks/AC300/*.csv`) ve deney betiği (`run_
    - Ölçeklenebilirlik (D2), dosyalardaki kapasite değerleriyle de ayrıca çalıştırılıp karşılaştırılır.
 
 Raporda iki karşılaştırma ayrı tablolarda verilir ve bu bölümdeki gözlemler sınırlılık olarak belirtilir.
+
+---
+
+## A7 — Derin öğrenme tabanlı kişi tespiti: İHA'nın sensör modeli
+
+> Durum: **plan, onay bekliyor (25 Kasım 2026).** Kod yok. Entegrasyon CBBA A3'ten sonra; veri hazırlığı ve eğitim yan hat (A7.6).
+
+### A7.0 Amaç ve projedeki yeri
+
+- Grøntved vd. 2023'te sensör **soyuttur**: bir şerit uçulunca 3 m genişliğindeki alan "taranmış" sayılır (CoverageTasks README: "sweep-width of 3 meters"). Taramanın neyi aradığı modellenmez.
+- A7 bu soyut sensörün yerine **gerçek görüntü + gerçek model kararı** koyar ve taramanın amacını somutlaştırır: arama-kurtarmada kişi bulmak.
+- **Ayrı bir proje değildir.** Tespit, CBBA'nın dinamik görev ekleme/yeniden atama mekanizmasını (A5) gerçek bir tetikleyiciyle çalıştırır: tespit → doğrulama görevi → dağıtık atama.
+- Danışmanın alanıyla bağlantı: CNN/ViT, transfer öğrenme, açıklanabilir YZ.
+
+### A7.1 Veri seti: HERIDAL
+
+| | Durum | Bilgi |
+|---|---|---|
+| Künye | ✅ Doğrulandı (dblp, Springer DOI) | Božić-Štulić, D., Marušić, Ž., Gotovac, S. (2019). "Deep Learning Approach in Aerial Imagery for Supporting Land Search and Rescue Missions". *International Journal of Computer Vision*, 127(9), 1256–1278. DOI: 10.1007/s11263-019-01177-1. Not: CROSBI kaydı sayfaları 1–23 veriyor (çevrimiçi ön yayın numaralandırması olabilir); kaynakçada dblp/Springer'deki 1256–1278 kullanılır. |
+| Makaledeki sonuç (yalnız bağlam) | ✅ Arama özetinden | Önerdikleri yöntem (görsel dikkat ile arama alanını daraltma + CNN) %88,9 tespit oranı, %34,8 kesinlik; Faster R-CNN biraz daha düşük. **PDF bu oturumda okunmadı**; rapora girmeden önce makaleden doğrulanacak. |
+| Barındırma | ⚠️ Okunamadı | IPSAR (FESB, Split Üniversitesi): `http://ipsar.fesb.unist.hr/HERIDAL%20database.html`. 25 Kasım 2026'da iki denemede bağlantı sıfırlandı (ECONNRESET). |
+| **Erişim / lisans** | ❌ **Doğrulanmadı** | Orijinal sayfa okunamadığı için HERIDAL'ın kendi kullanım koşulları bilinmiyor. Aramada "yalnızca akademik araştırma; yeniden dağıtım, değiştirme ve ticari kullanım izinsiz yasak" koşullu bir erişim formu çıktı, ama **HERIDAL'a ait olduğu doğrulanamadı.** |
+| Türev kopya | ✅ Doğrulandı (Zenodo sayfası) | Pyrrö (Aalto Üniversitesi), "HERIDAL dataset in keras-retinanet PASCAL VOC format", DOI: 10.5281/zenodo.5662351, 2021, 8,3 GB, **CC BY 3.0 Unported**. Açıklama: "Modified version of the HERIDAL dataset". Bu lisans **türev için** verilmiş; orijinal HERIDAL'ın lisansını belirtmiyor. |
+| İçerik | ⚠️ Kısmen | 3.229 kişi etiketi (2.892 eğitim, 337 test) [Pyrrö vd., "Rethinking Drone-Based Search and Rescue with Aerial Person Detection", arXiv:2111.09406, 2021 — sayı arama özetinden, yazar listesi sayfadan okunmadı]. "68.750'den fazla görüntü parçası" [Gotovac vd., *Remote Sensing* 12(20):3295, 2020 — arama özetinden]. **Parça boyutu, pozitif/negatif parça sayıları ve görüntü çözünürlüğü doğrulanmadı**; IJCV makalesinden alınacak. |
+
+**Kararlar (öneri):**
+1. Kullanıcı IPSAR sayfasını tarayıcıdan açar (bizim bağlantımız sıfırlandı); koşullar okunur ve buraya alıntılanır. Sayfa açılmazsa yazarlara e-posta.
+2. **Koşullar netleşmeden veri indirilmez.** Repoya hiçbir HERIDAL görüntüsü ve model ağırlığı konmaz; yalnızca dosya yolları/kimlikleri (`.gitignore`).
+3. Zenodo türevi (CC BY 3.0) yedek seçenektir; orijinal koşullarla çelişmediği doğrulanmadan kullanılmaz.
+
+### A7.2 Yöntem: parça sınıflandırma, transfer öğrenme, açıklanabilirlik
+
+- **Görev:** görüntü parçasında kişi **var / yok** ikili sınıflandırması. Nesne tespiti (kutu) yerine sınıflandırma, çünkü sensör modeli hücre başına bir karar ister (A7.3) ve hesap maliyeti düşüktür.
+- **Modeller (karşılaştırma):** ImageNet ön eğitimli **ResNet-50**, **DenseNet-121** ve **ViT-B/16**. Seçim **bizim seçimimiz** (yaygın, hazır ağırlıkları var); HERIDAL üzerinde sınıflandırma yapan çalışmalar ayrıca taranıp ilgili çalışma olarak eklenecek.
+- **Transfer öğrenme:** iki düzey karşılaştırılır: (1) gövde dondurulur, yalnız sınıflandırıcı eğitilir; (2) ince ayar (tüm ağ). Öğrenme oranı, dönem sayısı, veri artırma: **test ayarı** (kaynaklı değer bulunursa güncellenir).
+- **Değerlendirme kümeleri:** HERIDAL'ın kendi eğitim/test ayrımı; doğrulama kümesi eğitimden ayrılır (oran test ayarı). Test kümesi model seçiminde kullanılmaz. Sınıf dengesizliği raporlanır.
+- **Açıklanabilirlik:** CNN'ler için **Grad-CAM** (Selvaraju vd., ICCV 2017); ViT için Grad-CAM uyarlaması ya da attention rollout (Abnar & Zuidema, 2020). *Künyeler bu oturumda doğrulanmadı.* Amaç: modelin kişiye mi arka plana mı baktığını göstermek ve yanlış alarmların nedenini incelemek.
+- **Ortam:** eğitim Google Colab (GPU); simülasyonda çıkarım yerel CPU'da (yeterli hız ölçülecek). Kütüphaneler yalnızca bu modülde: PyTorch, torchvision, timm (ViT), pytorch-grad-cam.
+- **Modül:** `detection/` (repo içinde, ayrı paket). `swarm_core` `detection`'ı import etmez; `detection` da `swarm_core`'u import etmez. Planlanan dosyalar: `detection/heridal.py` (parça yükleyici), `train.py`, `evaluate.py`, `explain.py` (Grad-CAM), `sensor.py` (`classify(parça) → (etiket, güven)`), `notebooks/train_colab.ipynb`.
+
+### A7.3 Simülasyona bağlama: veri setine dayalı sensör simülasyonu
+
+1. **Hücreler:** alan hücrelere bölünür. Hücre boyutu tarama genişliğiyle (3 m) uyumlu seçilir. ⚠️ HERIDAL parçasının yerde kapladığı alan (yer örnekleme aralığı × piksel) ve çekim irtifası bilinmeden kesinleşmez; uçuş irtifamız 2,5 m (PX4 varsayılanı) HERIDAL'ın çekim irtifasından çok farklı olabilir → **sınırlılık olarak yazılır.** Hücre boyutu şimdilik test ayarı.
+2. **Parça eşleme:** her hücreye HERIDAL **test** kümesinden gerçek bir parça eşlenir: kişi yerleştirilen hücrelere pozitif, diğerlerine negatif parça. Eğitimde görülen parçalar kullanılmaz (veri sızıntısı olmaması için).
+3. **Kişi yerleşimi:** ⚠️ **Deney tasarımı — kaynak değil, bizim seçimimiz.** Kişi sayısı ve konumları tohumla rastgele (engel içi hariç); tohum ve sayı test ayarı.
+4. **Tarama:** İHA'nın 3 m tarama izi bir hücreyle kesiştiğinde o hücrenin parçası gerçek modele verilir. Her hücre bir kez değerlendirilir.
+5. **Karar:** güven ≥ eşik ise (eşik doğrulama kümesinin ROC eğrisinden seçilir; test ayarı) `person_detected` olayı gönderilir ve o nokta için bir **doğrulama görevi** oluşturulur (`confirm_task_created`, A0.0.5). Görev CBBA'ya **dinamik görev** olarak eklenir ve A5'teki dinamik ekleme/yeniden atama mekanizmasıyla atanır. Yer gerçeği bilindiği için her tespit doğru/yanlış alarm olarak işaretlenir.
+6. Python deneyleri (Gazebo'suz) ve Gazebo gösterimi **aynı sensör modülünü** kullanır.
+- **Neden Gazebo kamerası değil:** Gazebo sahnesinde kişi modeli ve gerçekçi arazi yok; sentetik kamera görüntüsü modeli anlamlı biçimde sınamaz. Veri setine dayalı sensör, gerçek hava görüntüsü kullanır. **Sınırlılık:** parçalar sahnenin geometrisi ve aydınlatmasıyla tutarlı değildir.
+
+### A7.4 Görev modeli: doğrulama görevi (nokta görev)
+
+- `swarm_core/models.py`'deki `Task`'a **tür** alanı planlanır: `kind = "sweep"` (varsayılan; mevcut kod değişmeden çalışır) veya `"confirm"`.
+- Doğrulama görevinin `waypoints` listesi tek noktadır (başlangıç = bitiş). K11 ("sıfır uzunluklu görev nokta görev gibi işlenir") sayesinde CBBA'da ayrı bir yol gerekmez.
+- Kimlikler 1000'den başlar (A0.0.5; arayüz ayarı).
+- **Açık karar (K17, MAKALEDE YOK):** doğrulama görevinin ödülü (`c̄_j`; tarama görevleri için 1, K3) ve noktada bekleme süresi.
+- Kod A7 entegrasyonunda (A3 sonrası) yazılır; şimdi `models.py` değişmez.
+
+### A7.5 Metrikler
+
+- **Sınıflandırma** (HERIDAL test kümesi, model başına): doğruluk, kesinlik, duyarlılık, F1; ek olarak karışıklık matrisi, ROC-AUC, parametre sayısı ve parça başına çıkarım süresi.
+- **Görev düzeyi** (simülasyon):
+  - **İlk tespit süresi:** görev başlangıcından ilk doğru `person_detected` olayına kadar geçen süre.
+  - **Yanlış alarm başına boşa giden uçuş süresi:** yanlış alarm için oluşturulan doğrulama görevine harcanan geçiş + bekleme süresi, yanlış alarm sayısına bölünür.
+  - Ek: bütün kişilerin bulunma süresi, kaçırılan kişi sayısı, toplam görev süresine etkisi.
+- Kesin tanımlar A5 metrikleriyle birlikte yazılır.
+
+### A7.6 Sıra ve süre
+
+| İş | Ne zaman | Bağımlılık |
+|---|---|---|
+| HERIDAL erişim/lisans netleştirme | **Hemen** (yan hat) | Kullanıcı: IPSAR sayfası / yazarlara e-posta |
+| Literatür: HERIDAL'da sınıflandırma çalışmaları; Grad-CAM ve ViT açıklanabilirlik künyeleri | Yan hat | — |
+| Veri hazırlığı, eğitim, model karşılaştırması, Grad-CAM (Colab) | Yan hat, CBBA A1–A3 ile paralel | Lisans |
+| Sensör simülasyonu, doğrulama görevi, `person_detected` / `confirm_task_created` gönderimi | **CBBA A3'ten sonra**, A5 dinamik ekleme ile birlikte | A3, A5 |
+| Panelde "Tespitler" sekmesi/kartı | Entegrasyonla | A0.1 |
+
+**Kaba süre tahmini:** yan hat ≈ 5–7 iş günü (Colab GPU süresine bağlı), entegrasyon ≈ 2–3 iş günü.
+
+### A7.7 Açık kararlar
+
+| # | Konu |
+|---|---|
+| 1 | HERIDAL kullanım koşulları (A7.1) — **engelleyici** |
+| 2 | Hücre boyutu ve HERIDAL çekim irtifası / yer örnekleme aralığı uyumu |
+| 3 | Kişi sayısı ve yerleşim (deney tasarımı) |
+| 4 | Karar eşiği |
+| 5 | Doğrulama görevi ödülü ve bekleme süresi (K17) |
+| 6 | Kesin model listesi ve eğitim ayarları |

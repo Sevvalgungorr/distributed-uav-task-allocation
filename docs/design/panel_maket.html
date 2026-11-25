@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sürü İHA Paneli — Maket</title>
+<!--
+  TASARIM MAKETİ (docs/cbba_plan.md, A0.1). Örnek animasyon içerir; ?t=640 ile belirli bir ana gidilir.
+  - Geometri gerçek: scenarios/AC10_0000.json (swarm_core.dataset ile okundu, sayfaya gömüldü).
+  - Atama, ilerleme, hız/irtifa, zaman çizelgesi ve olay günlüğü ÖRNEKTİR; canlı veri yoktur.
+  - Ağ bağlantısı yok, dış kütüphane yok; dosyayı tarayıcıda açmak yeterli.
+-->
+<style>
+:root{
+  --bg:#0b0f14; --bg2:#0f141b; --panel:#131a23; --panel2:#18212c; --line:#243041; --line2:#2e3c50;
+  --text:#e6edf5; --muted:#8a98ab; --faint:#5c6a7d;
+  --uav1:#4c9dff; --uav2:#ff9f43; --done:#2ecc71; --done-fill:rgba(46,204,113,.16);
+  --strip:#3b4758; --obst:#5b6675; --obst-edge:#8592a3;
+  --warn:#f5c451; --bad:#ff6b6b; --accent:#7cc4ff;
+  --mono: "JetBrains Mono","Cascadia Mono",Consolas,"SFMono-Regular",monospace;
+  --sans: "Inter","Segoe UI",system-ui,-apple-system,Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:13px/1.45 var(--sans)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.sample{display:inline-block;font:600 9.5px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;
+  color:var(--warn);border:1px solid rgba(245,196,81,.45);border-radius:3px;padding:2px 4px;margin-left:6px;vertical-align:middle}
+
+/* Üst çubuk */
+header{display:flex;align-items:center;gap:18px;padding:10px 18px;border-bottom:1px solid var(--line);background:var(--bg2)}
+.brand{display:flex;align-items:center;gap:10px}
+.brand svg{flex:none}
+.brand h1{font-size:15px;margin:0;font-weight:650;letter-spacing:.01em}
+.brand p{margin:0;color:var(--muted);font-size:12px}
+.pills{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+.pill{display:flex;align-items:center;gap:6px;border:1px solid var(--line2);background:var(--panel);border-radius:999px;padding:4px 10px;font-size:11.5px;color:var(--muted)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--done);box-shadow:0 0 0 3px rgba(46,204,113,.15)}
+.mock-badge{border:1px solid rgba(245,196,81,.5);color:var(--warn);background:rgba(245,196,81,.08);border-radius:6px;padding:5px 10px;font-size:11.5px;font-weight:600}
+
+/* Sekmeler */
+nav{display:flex;gap:2px;padding:0 18px;border-bottom:1px solid var(--line);background:var(--bg2)}
+nav a{padding:9px 14px;color:var(--muted);text-decoration:none;font-weight:550;border-bottom:2px solid transparent;font-size:12.5px;display:flex;align-items:center;gap:6px}
+nav a.on{color:var(--text);border-bottom-color:var(--accent)}
+nav a.off{color:var(--faint);cursor:not-allowed}
+nav .later{font-size:9.5px;border:1px solid var(--line2);border-radius:3px;padding:1px 4px;color:var(--faint)}
+
+/* Yerleşim */
+main{display:grid;grid-template-columns:272px minmax(520px,1fr) 352px;gap:12px;padding:12px 18px}
+.col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.card h2{margin:0 0 10px;font-size:11.5px;font-weight:650;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:8px}
+.card h2 .right{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500}
+dl.kv{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;margin:0}
+dl.kv dt{color:var(--muted)} dl.kv dd{margin:0;text-align:right;white-space:nowrap}
+.src{color:var(--faint);font-size:11px;margin-top:8px;line-height:1.4}
+
+/* Atama kaynağı etiketi */
+.srcTag{display:inline-flex;align-items:center;gap:6px;font-weight:650;font-size:12px;border-radius:6px;padding:4px 9px}
+.srcTag.manual{background:rgba(245,196,81,.10);color:var(--warn);border:1px solid rgba(245,196,81,.4)}
+.srcTag.cbba{background:rgba(124,196,255,.10);color:var(--accent);border:1px solid rgba(124,196,255,.4)}
+
+/* Harita */
+.mapcard{padding:0;display:flex;flex-direction:column;overflow:hidden}
+.maphead{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.maphead h2{margin:0}
+.layers{margin-left:auto;display:flex;gap:4px;flex-wrap:wrap}
+.layers label{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--muted);border:1px solid var(--line2);border-radius:6px;padding:3px 8px;cursor:pointer;user-select:none}
+.layers input{accent-color:var(--accent);margin:0}
+#map{display:block;width:100%;height:auto;background:
+  radial-gradient(ellipse at 50% 40%, #101823 0%, #0b0f14 75%)}
+.player{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--panel2)}
+.animTag{font:700 10.5px/1 var(--sans);letter-spacing:.08em;color:#0b0f14;background:var(--warn);border-radius:4px;padding:5px 7px}
+.player button,.player select{background:var(--panel);color:var(--text);border:1px solid var(--line2);border-radius:6px;height:26px;min-width:30px;font:12px var(--sans);cursor:pointer}
+.player input[type=range]{flex:1;accent-color:var(--warn)}
+.mapfoot{display:flex;gap:16px;padding:8px 14px;border-top:1px solid var(--line);color:var(--faint);font-size:11px}
+
+/* İHA kartları */
+.uav{border-left:3px solid var(--c);}
+.uavhead{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.uavhead b{font-size:14px}
+.uavhead .sid{color:var(--muted);font-size:12px}
+.badge{margin-left:auto;font-size:11px;font-weight:650;border-radius:999px;padding:2px 9px}
+.badge.go{background:rgba(46,204,113,.12);color:var(--done);border:1px solid rgba(46,204,113,.4)}
+.badge.mid{background:rgba(124,196,255,.10);color:var(--accent);border:1px solid rgba(124,196,255,.4)}
+.badge.end{background:#1c2633;color:var(--muted);border:1px solid var(--line2)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px}
+.metric{display:flex;justify-content:space-between;gap:8px;border-bottom:1px dashed #1f2a38;padding-bottom:3px}
+.metric span:first-child{color:var(--muted)}
+.na{color:var(--faint)}
+.bar{height:6px;background:#1c2633;border-radius:99px;overflow:hidden;margin-top:8px}
+.bar i{display:block;height:100%;background:var(--c)}
+
+/* Oran kartları */
+.ratios{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.big{font:650 28px/1.1 var(--mono);margin:2px 0 4px}
+.sub{color:var(--muted);font-size:11.5px}
+.formula{margin-top:8px;padding:6px 8px;border-radius:6px;background:var(--panel2);border:1px solid var(--line);font:11px/1.45 var(--mono);color:#b9c6d6}
+.ring{display:flex;align-items:center;gap:12px}
+
+/* Alt şerit */
+.bottom{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:12px;padding:0 18px 14px}
+#chart{width:100%;height:auto;display:block}
+.log{font:11.5px/1.6 var(--mono);max-height:168px;overflow:auto}
+.log div{display:grid;grid-template-columns:64px 52px 1fr;gap:8px;border-bottom:1px solid #18212c}
+.log .t{color:var(--faint)}
+.empty{border:1px dashed var(--line2);border-radius:8px;padding:14px;color:var(--muted);text-align:center;font-size:12px}
+.empty b{display:block;color:var(--text);margin-bottom:4px}
+
+/* Lejant */
+.legend{display:grid;grid-template-columns:22px 1fr;gap:6px 8px;align-items:center;font-size:12px}
+.legend svg{display:block}
+@media (max-width:1280px){ main{grid-template-columns:1fr 340px} main>.col:first-child{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,1fr)} .bottom{grid-template-columns:1fr} }
+@media (max-width:900px){ main{grid-template-columns:1fr} main>.col:first-child{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true">
+      <g fill="none" stroke="#7cc4ff" stroke-width="1.6">
+        <circle cx="7" cy="7" r="4"/><circle cx="23" cy="7" r="4"/><circle cx="7" cy="23" r="4"/><circle cx="23" cy="23" r="4"/>
+        <path d="M10 10l10 10M20 10L10 20"/></g><rect x="12" y="12" width="6" height="6" rx="1.5" fill="#7cc4ff"/>
+    </svg>
+    <div>
+      <h1>Sürü İHA · Dağıtık Görev Paylaşımı</h1>
+      <p>PX4 SITL + Gazebo Harmonic · Alan tarama · İzleme paneli</p>
+    </div>
+  </div>
+  <div class="pills">
+    <span class="pill"><span class="dot"></span>Telemetri UDP 14550 <span class="sample">örnek</span></span>
+    <span class="pill"><span class="dot"></span>Görev olayları UDP 15600 <span class="sample">örnek</span></span>
+    <span class="pill">Görev süresi <b class="num" id="elapsed" style="color:var(--text)">&nbsp;—</b> <span class="sample">örnek</span></span>
+  </div>
+  <span class="mock-badge">MAKET · canlı veri yok</span>
+</header>
+
+<nav>
+  <a class="on" href="#">Canlı izleme</a>
+  <a class="off">Görevler <span class="later">sonra</span></a>
+  <a class="off">İHA'lar <span class="later">sonra</span></a>
+  <a class="off">Atama / CBBA <span class="later">A1 sonrası</span></a>
+  <a class="off">Tespitler <span class="later">A7</span></a>
+  <a class="off">Deneyler <span class="later">A3 sonrası</span></a>
+</nav>
+
+<main>
+  <!-- SOL SÜTUN -->
+  <section class="col">
+    <div class="card">
+      <h2>Senaryo</h2>
+      <dl class="kv">
+        <dt>Ortam</dt><dd class="num">AC10_0000</dd>
+        <dt>Alan</dt><dd class="num">100 × 100 m</dd>
+        <dt>Alan büyüklüğü</dt><dd class="num" id="areaTxt">—</dd>
+        <dt>Engel</dt><dd class="num" id="obsTxt">—</dd>
+        <dt>Görev (şerit)</dt><dd class="num" id="taskTxt">—</dd>
+        <dt>Toplam şerit uzunluğu</dt><dd class="num" id="lenTxt">—</dd>
+        <dt>Tarama genişliği</dt><dd class="num">3 m</dd>
+        <dt>v<sub>max</sub>, a<sub>max</sub></dt><dd class="num">3 m/s, 1 m/s²</dd>
+        <dt>İrtifa</dt><dd class="num">2,5 m</dd>
+      </dl>
+      <div class="src">Veri seti: CoverageTasks (Grøntved vd., ICAR 2023). 3 m: veri seti README. v/a: makale §V. İrtifa: PX4 varsayılanı (test ayarı).</div>
+    </div>
+
+    <div class="card">
+      <h2>Görev ataması</h2>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span class="srcTag manual">● Manuel atama</span><span class="sample">örnek</span>
+      </div>
+      <dl class="kv">
+        <dt><span style="color:var(--uav1)">■</span> İHA-1</dt><dd class="num" id="as1">—</dd>
+        <dt><span style="color:var(--uav2)">■</span> İHA-2</dt><dd class="num" id="as2">—</dd>
+        <dt>Atanmamış</dt><dd class="num">0</dd>
+      </dl>
+      <div class="src">Etiket <span class="num">assignment.source</span> alanından gelir: <span class="num">"manual"</span> → Manuel atama, <span class="num">"cbba"</span> → CBBA. Elle atama hiçbir zaman CBBA olarak gösterilmez.</div>
+    </div>
+
+    <div class="card">
+      <h2>Lejant</h2>
+      <div class="legend">
+        <svg width="22" height="10"><line x1="1" y1="5" x2="21" y2="5" stroke="#3b4758" stroke-width="2"/></svg><span>Taranmamış şerit</span>
+        <svg width="22" height="10"><rect x="0" y="1" width="22" height="8" fill="rgba(46,204,113,.22)"/><line x1="1" y1="5" x2="21" y2="5" stroke="#2ecc71" stroke-width="2"/></svg><span>Tamamlanan şerit + 3 m tarama izi</span>
+        <svg width="22" height="10"><line x1="1" y1="5" x2="21" y2="5" stroke="#4c9dff" stroke-width="3.5"/></svg><span>Aktif şerit (İHA renginde, parlak)</span>
+        <svg width="22" height="14"><circle cx="9" cy="7" r="4.5" fill="#0b0f14" stroke="#4c9dff" stroke-width="1.6"/><path d="M21 7 L15 3.5 L15 10.5Z" fill="#4c9dff"/></svg><span>İHA konumu + yön oku</span>
+        <svg width="22" height="10"><line x1="1" y1="5" x2="21" y2="5" stroke="#4c9dff" stroke-width="1.5" opacity=".9"/></svg><span>Uçulan iz, son 60 s (telemetri)</span>
+        <svg width="22" height="10"><line x1="1" y1="5" x2="21" y2="5" stroke="#cfd8e3" stroke-width="1.5" stroke-dasharray="3 3"/></svg><span>Planlanan rota (atamadan)</span>
+        <svg width="22" height="12"><rect x="3" y="1" width="16" height="10" fill="#5b6675" stroke="#8592a3"/></svg><span>Engel (veri seti)</span>
+        <svg width="22" height="12"><path d="M11 1 L19 11 H3Z" fill="none" stroke="#e6edf5"/></svg><span>Kalkış noktası (veri seti 0,0)</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ORTA: HARİTA -->
+  <section class="col">
+    <div class="card mapcard">
+      <div class="maphead">
+        <h2 style="font-size:11.5px;font-weight:650;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)">Canlı harita · üstten</h2>
+        <div class="layers" id="layers">
+          <label><input type="checkbox" data-l="swath" checked>3 m izi</label>
+          <label><input type="checkbox" data-l="trail" checked>Uçulan iz</label>
+          <label><input type="checkbox" data-l="plan" checked>Planlanan rota</label>
+          <label><input type="checkbox" data-l="ids">Görev no.</label>
+        </div>
+      </div>
+      <div class="player">
+        <span class="animTag">● ÖRNEK ANİMASYON</span>
+        <button id="play" type="button" aria-label="Oynat / duraklat">❚❚</button>
+        <button id="restart" type="button" aria-label="Başa sar">↺</button>
+        <select id="speed" aria-label="Oynatma hızı"><option value="5">×5</option><option value="10" selected>×10</option><option value="20">×20</option><option value="40">×40</option></select>
+        <input id="seek" type="range" min="0" max="1000" value="0" aria-label="Zaman">
+        <span class="num" id="clock">00:00</span>
+      </div>
+      <svg id="map" viewBox="-9 -7 118 116" role="img" aria-label="AC10_0000 alanı, engeller ve tarama şeritleri"></svg>
+      <div class="mapfoot">
+        <span>Koordinat: veri seti metre (x doğu, y kuzey), dünya (0,0) = veri seti (0,0)</span>
+        <span style="margin-left:auto">Oynatma ve katman düğmeleri yalnızca bu maketi/görünümü etkiler; İHA'ya komut gönderilmez.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- SAĞ SÜTUN -->
+  <section class="col">
+    <div class="ratios">
+      <div class="card">
+        <h2>Görev tamamlama</h2>
+        <div class="big" id="taskPct">—</div>
+        <div class="sub" id="taskSub">—</div>
+        <div class="bar" style="--c:var(--accent)"><i id="taskBar"></i></div>
+        <div class="formula">tamamlanan görev<br>÷ toplam görev</div>
+        <div class="src">Kaynak: <span class="num">task_finished</span> olayları</div>
+      </div>
+      <div class="card">
+        <h2>Fiziksel kapsama</h2>
+        <div class="big" id="covPct">—</div>
+        <div class="sub" id="covSub">—</div>
+        <div class="bar" style="--c:var(--done)"><i id="covBar"></i></div>
+        <div class="formula">Σ taranan şerit uzunluğu<br>× 3 m ÷ 10.000 m²</div>
+        <div class="src" id="covNote">Yaklaşık değer.</div>
+      </div>
+    </div>
+
+    <div class="card uav" id="uav1" style="--c:var(--uav1)"></div>
+    <div class="card uav" id="uav2" style="--c:var(--uav2)"></div>
+
+    <div class="card">
+      <h2>Atama görünümü <span class="right"><span class="sample">örnek</span></span></h2>
+      <svg id="mini" viewBox="-3 -3 106 106" style="width:100%;height:auto;display:block" aria-label="Mini harita: şeritlerin İHA'lara dağılımı"></svg>
+      <div class="src">Mini harita, ana haritadan farklı olarak <b>durumu değil sahipliği</b> gösterir: her şerit, atandığı İHA'nın renginde.</div>
+    </div>
+  </section>
+</main>
+
+<section class="bottom">
+  <div class="card">
+    <h2>Kapsama zaman çizelgesi <span class="right"><span class="sample">örnek</span></span></h2>
+    <svg id="chart" viewBox="0 0 520 190" aria-label="Zamana göre görev tamamlama ve fiziksel kapsama oranı"></svg>
+  </div>
+  <div class="card">
+    <h2>Olay günlüğü <span class="right"><span class="sample">örnek</span></span></h2>
+    <div class="log" id="log"></div>
+  </div>
+  <div class="card">
+    <h2>Tespitler <span class="right" style="color:var(--faint)">A7</span></h2>
+    <div class="empty"><b>Henüz tespit modeli yok</b>
+      Kişi tespiti A7'de eklenecek (HERIDAL tabanlı sensör modeli).<br>
+      Olaylar: <span class="num">person_detected</span>, <span class="num">confirm_task_created</span></div>
+    <h2 style="margin-top:14px">Kaynak notu</h2>
+    <div class="src" style="margin-top:0">Geometri: Grøntved, Lundquist, Christensen (ICAR 2023), CoverageTasks AC10_0000, MIT lisansı. Atama, ilerleme, hız/irtifa, süre ve olaylar bu maket için üretilmiş <b>örnek</b> değerlerdir; örnek animasyon hız rampası modeliyle (v<sub>max</sub> 3 m/s, a<sub>max</sub> 1 m/s²) hesaplanır, engellerden kaçınmaz. Pil/enerji: A4 enerji modeline kadar gösterilmez.</div>
+  </div>
+</section>
+
+<script>
+const GEOM = {"boundary":[[0.0,0.0],[100.0,0.0],[100.0,100.0],[0.0,100.0],[0.0,0.0]],"obstacles":[[[43.05,42.21],[40.34,35.72],[26.38,40.25],[27.87,44.51],[19.05,48.18],[22.15,54.06],[32.62,51.06],[31.14,46.97],[43.05,42.21]],[[37.42,57.33],[32.68,52.84],[26.33,59.6],[27.09,61.02],[31.42,63.72],[37.42,57.33]],[[47.63,69.44],[44.63,67.47],[42.05,70.41],[39.75,70.53],[36.4,75.21],[39.11,77.63],[46.32,73.31],[47.63,69.44]],[[73.19,84.85],[60.64,81.16],[59.34,85.29],[46.85,82.51],[51.29,91.69],[58.78,93.6],[60.08,89.48],[71.08,91.39],[73.19,84.85]],[[78.87,27.64],[70.52,21.98],[52.26,47.07],[61.3,52.82],[78.87,27.64]],[[79.91,63.74],[65.76,52.79],[55.09,67.58],[70.06,78.82],[79.91,63.74]],[[97.28,39.73],[96.52,31.79],[79.63,32.46],[79.8,40.54],[97.28,39.73]],[[94.63,28.29],[94.28,25.14],[91.35,24.66],[91.66,28.19],[94.63,28.29]],[[93.61,94.33],[87.61,89.67],[84.75,93.6],[91.38,98.12],[93.61,94.33]],[[99.26,52.99],[97.74,43.17],[88.25,41.7],[90.57,54.36],[99.26,52.99]]],"tasks":[{"id":1,"a":[61.3,52.82],"b":[52.26,47.07],"len":10.72},{"id":2,"a":[90.23,52.5],"b":[61.53,52.5],"len":28.7},{"id":3,"a":[63.62,49.5],"b":[89.68,49.5],"len":26.06},{"id":4,"a":[89.13,46.5],"b":[65.71,46.5],"len":23.42},{"id":5,"a":[67.8,43.5],"b":[88.58,43.5],"len":20.77},{"id":6,"a":[100.0,58.5],"b":[73.15,58.5],"len":26.85},{"id":7,"a":[99.26,52.99],"b":[90.57,54.36],"len":8.79},{"id":8,"a":[99.47,54.36],"b":[99.26,52.99],"len":1.39},{"id":9,"a":[69.27,55.5],"b":[100.0,55.5],"len":30.73},{"id":10,"a":[79.91,63.74],"b":[65.76,52.79],"len":17.89},{"id":11,"a":[100.0,61.5],"b":[77.02,61.5],"len":22.98},{"id":12,"a":[79.41,64.5],"b":[100.0,64.5],"len":20.59},{"id":13,"a":[100.0,67.5],"b":[77.45,67.5],"len":22.55},{"id":14,"a":[75.5,70.5],"b":[100.0,70.5],"len":24.5},{"id":15,"a":[100.0,73.5],"b":[73.54,73.5],"len":26.46},{"id":16,"a":[71.58,76.5],"b":[100.0,76.5],"len":28.42},{"id":17,"a":[55.09,67.58],"b":[70.06,78.82],"len":18.72},{"id":18,"a":[44.68,67.5],"b":[55.15,67.5],"len":10.47},{"id":19,"a":[39.75,70.53],"b":[42.05,70.41],"len":2.31},{"id":20,"a":[0.0,70.5],"b":[40.37,70.5],"len":40.37},{"id":21,"a":[44.6,67.5],"b":[0.0,67.5],"len":44.6},{"id":22,"a":[47.63,69.44],"b":[44.63,67.47],"len":3.6},{"id":23,"a":[58.98,70.5],"b":[47.27,70.5],"len":11.71},{"id":24,"a":[59.34,85.29],"b":[46.85,82.51],"len":12.8},{"id":25,"a":[0.0,82.5],"b":[60.22,82.5],"len":60.22},{"id":26,"a":[100.0,79.5],"b":[0.0,79.5],"len":100.0},{"id":27,"a":[65.21,82.5],"b":[100.0,82.5],"len":34.79},{"id":28,"a":[73.19,84.85],"b":[60.64,81.16],"len":13.08},{"id":29,"a":[100.0,85.5],"b":[72.98,85.5],"len":27.02},{"id":30,"a":[72.01,88.5],"b":[100.0,88.5],"len":27.99},{"id":31,"a":[60.08,89.48],"b":[71.08,91.39],"len":11.16},{"id":32,"a":[86.28,91.5],"b":[59.44,91.5],"len":26.84},{"id":33,"a":[93.61,94.33],"b":[87.61,89.67],"len":7.59},{"id":34,"a":[100.0,94.5],"b":[93.51,94.5],"len":6.49},{"id":35,"a":[89.96,91.5],"b":[100.0,91.5],"len":10.04},{"id":36,"a":[91.38,98.12],"b":[84.75,93.6],"len":8.02},{"id":37,"a":[100.0,97.5],"b":[91.75,97.5],"len":8.25},{"id":38,"a":[0.0,100.0],"b":[100.0,100.0],"len":100.0},{"id":39,"a":[90.47,97.5],"b":[0.0,97.5],"len":90.47},{"id":40,"a":[0.0,94.5],"b":[86.07,94.5],"len":86.07},{"id":41,"a":[51.2,91.5],"b":[0.0,91.5],"len":51.2},{"id":42,"a":[58.78,93.6],"b":[51.29,91.69],"len":7.73},{"id":43,"a":[0.0,88.5],"b":[49.75,88.5],"len":49.75},{"id":44,"a":[48.29,85.5],"b":[0.0,85.5],"len":48.29},{"id":45,"a":[66.97,76.5],"b":[41.0,76.5],"len":25.96},{"id":46,"a":[46.0,73.5],"b":[62.97,73.5],"len":16.97},{"id":47,"a":[39.11,77.63],"b":[46.32,73.31],"len":8.4},{"id":48,"a":[36.4,75.21],"b":[39.11,77.63],"len":3.64},{"id":49,"a":[0.0,76.5],"b":[37.85,76.5],"len":37.85},{"id":50,"a":[37.62,73.5],"b":[0.0,73.5],"len":37.62},{"id":51,"a":[63.81,55.5],"b":[35.49,55.5],"len":28.32},{"id":52,"a":[0.0,64.5],"b":[57.31,64.5],"len":57.31},{"id":53,"a":[27.87,61.5],"b":[0.0,61.5],"len":27.87},{"id":54,"a":[31.42,63.72],"b":[27.09,61.02],"len":5.1},{"id":55,"a":[59.48,61.5],"b":[33.5,61.5],"len":25.97},{"id":56,"a":[36.32,58.5],"b":[61.64,58.5],"len":25.32},{"id":57,"a":[32.68,52.84],"b":[37.42,57.33],"len":6.53},{"id":58,"a":[0.0,55.5],"b":[30.18,55.5],"len":30.18},{"id":59,"a":[27.36,58.5],"b":[0.0,58.5],"len":27.36},{"id":60,"a":[60.79,52.5],"b":[27.6,52.5],"len":33.2},{"id":61,"a":[32.06,49.5],"b":[56.07,49.5],"len":24.02},{"id":62,"a":[22.15,54.06],"b":[32.62,51.06],"len":10.89},{"id":63,"a":[0.0,52.5],"b":[21.33,52.5],"len":21.33},{"id":64,"a":[19.75,49.5],"b":[0.0,49.5],"len":19.75},{"id":65,"a":[27.87,44.51],"b":[19.05,48.18],"len":9.55},{"id":66,"a":[0.0,43.5],"b":[27.52,43.5],"len":27.52},{"id":67,"a":[23.09,46.5],"b":[0.0,46.5],"len":23.09},{"id":68,"a":[0.0,40.5],"b":[26.47,40.5],"len":26.47},{"id":69,"a":[34.85,37.5],"b":[0.0,37.5],"len":34.85},{"id":70,"a":[40.34,35.72],"b":[26.38,40.25],"len":14.68},{"id":71,"a":[59.22,37.5],"b":[41.09,37.5],"len":18.14},{"id":72,"a":[0.0,34.5],"b":[61.41,34.5],"len":61.41},{"id":73,"a":[63.59,31.5],"b":[0.0,31.5],"len":63.59},{"id":74,"a":[0.0,28.5],"b":[65.77,28.5],"len":65.77},{"id":75,"a":[67.96,25.5],"b":[0.0,25.5],"len":67.96},{"id":76,"a":[0.0,22.5],"b":[70.14,22.5],"len":70.14},{"id":77,"a":[100.0,19.5],"b":[0.0,19.5],"len":100.0},{"id":78,"a":[0.0,16.5],"b":[100.0,16.5],"len":100.0},{"id":79,"a":[100.0,13.5],"b":[0.0,13.5],"len":100.0},{"id":80,"a":[0.0,10.5],"b":[100.0,10.5],"len":100.0},{"id":81,"a":[100.0,7.5],"b":[0.0,7.5],"len":100.0},{"id":82,"a":[0.0,4.5],"b":[100.0,4.5],"len":100.0},{"id":83,"a":[100.0,1.5],"b":[0.0,1.5],"len":100.0},{"id":84,"a":[98.86,40.54],"b":[98.03,31.79],"len":8.79},{"id":85,"a":[100.0,47.98],"b":[99.03,41.7],"len":6.35},{"id":86,"a":[100.0,41.7],"b":[100.0,54.36],"len":12.66},{"id":87,"a":[88.25,41.7],"b":[100.0,41.7],"len":11.75},{"id":88,"a":[97.74,43.17],"b":[88.25,41.7],"len":9.6},{"id":89,"a":[97.51,41.7],"b":[97.74,43.17],"len":1.48},{"id":90,"a":[79.8,40.54],"b":[97.28,39.73],"len":17.5},{"id":91,"a":[69.9,40.5],"b":[79.8,40.5],"len":9.9},{"id":92,"a":[79.73,37.5],"b":[71.99,37.5],"len":7.74},{"id":93,"a":[74.08,34.5],"b":[79.67,34.5],"len":5.59},{"id":94,"a":[97.35,40.5],"b":[80.68,40.5],"len":16.67},{"id":95,"a":[100.0,40.54],"b":[97.36,40.54],"len":2.64},{"id":96,"a":[100.0,41.7],"b":[100.0,40.54],"len":1.16},{"id":97,"a":[100.0,31.79],"b":[100.0,40.54],"len":8.75},{"id":98,"a":[76.18,31.5],"b":[100.0,31.5],"len":23.82},{"id":99,"a":[75.71,25.5],"b":[91.42,25.5],"len":15.71},{"id":100,"a":[100.0,22.5],"b":[71.29,22.5],"len":28.71},{"id":101,"a":[94.32,25.5],"b":[100.0,25.5],"len":5.68},{"id":102,"a":[78.27,28.5],"b":[100.0,28.5],"len":21.73},{"id":103,"a":[70.52,21.98],"b":[78.87,27.64],"len":10.09},{"id":104,"a":[42.34,40.5],"b":[57.04,40.5],"len":14.7},{"id":105,"a":[31.14,46.97],"b":[43.05,42.21],"len":12.83},{"id":106,"a":[52.67,46.5],"b":[32.33,46.5],"len":20.35},{"id":107,"a":[39.82,43.5],"b":[54.86,43.5],"len":15.03}],"sample":{"1":{"tasks":[38,37,39,36,34,40,42,33,32,35,41,31,30,43,29,44,24,28,25,27,26,16,45,49,48,47,15,46,50,17,14,20,23,19,22,13,18,21,12,52,54,11,53,55,6,56,59,10,9,51,58,57,7,8,62,2,60,63],"done":31},"2":{"tasks":[83,82,81,80,79,78,77,76,100,103,75,99,101,74,102,73,98,72,93,84,97,69,71,92,70,90,68,91,94,104,95,96,87,88,89,5,66,107,105,85,65,4,67,106,86,3,61,64,1],"done":28}}};
+/* ÖRNEK ANİMASYON: canlı veri yok. İHA'lar örnek atamadaki şeritleri sırayla,
+   veri setindeki yönde uçar. Hareket, CLAUDE.md §13'teki hız rampası modeliyle
+   (v_max = 3 m/s, a_max = 1 m/s², her ayakta tam duruş) hesaplanır. Engellerden
+   kaçınma yoktur (fly_task.py ile aynı); geçişler düz çizgidir. */
+const NS = "http://www.w3.org/2000/svg";
+const C = {u1:"#4c9dff", u2:"#ff9f43", done:"#2ecc71", strip:"#3b4758"};
+const VMAX = 3, AMAX = 1, TAKEOFF_S = 8, TRAIL_S = 60;
+const Y = y => 100 - y;
+const el = (tag, attrs={}, parent) => { const e=document.createElementNS(NS,tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if(parent) parent.appendChild(e); return e; };
+const fmt = (v, d=1) => v.toLocaleString("tr-TR",{minimumFractionDigits:d, maximumFractionDigits:d});
+const mmss = s => `${String(Math.floor(s/60)).padStart(2,"0")}:${String(Math.floor(s%60)).padStart(2,"0")}`;
+const byId = Object.fromEntries(GEOM.tasks.map(t => [t.id, t]));
+const ptsAttr = poly => poly.map(([x,y]) => `${x},${Y(y)}`).join(" ");
+const polyArea = p => Math.abs(p.reduce((s,[x,y],i)=>{const [x2,y2]=p[(i+1)%p.length]; return s + x*y2 - x2*y;},0))/2;
+const totalLen = GEOM.tasks.reduce((s,t)=>s+t.len,0);
+const AREA = polyArea(GEOM.boundary);
+const maxCov = Math.min(1, totalLen*3/AREA);
+
+// ---- Hız rampası (her ayak durarak başlar ve biter) ----
+function rampDur(d){ const dc = VMAX*VMAX/AMAX; return d >= dc ? d/VMAX + VMAX/AMAX : 2*Math.sqrt(d/AMAX); }
+function rampAt(d, T, t){ // (yol, hız)
+  const ta = Math.min(VMAX/AMAX, T/2), vp = AMAX*ta;
+  if (t < ta) return [0.5*AMAX*t*t, AMAX*t];
+  if (t > T-ta) { const r=T-t; return [d - 0.5*AMAX*r*r, AMAX*r]; }
+  return [0.5*AMAX*ta*ta + vp*(t-ta), vp];
+}
+
+// ---- Örnek plan: her İHA için ayaklar ----
+const U = [
+  {id:1, color:C.u1, tasks:GEOM.sample["1"].tasks},
+  {id:2, color:C.u2, tasks:GEOM.sample["2"].tasks},
+];
+const EVENTS = [];
+for (const u of U) {
+  u.segs = []; let t = TAKEOFF_S, p = [0,0];
+  EVENTS.push({t:TAKEOFF_S, uav:u.id, msg:"takeoff"});
+  for (const id of u.tasks) {
+    const k = byId[id];
+    const dT = Math.hypot(k.a[0]-p[0], k.a[1]-p[1]);
+    if (dT > 0.01) { const D = rampDur(dT); u.segs.push({kind:"transit", task:id, from:p, to:k.a, d:dT, t0:t, t1:t+D}); t += D; }
+    const D = Math.max(rampDur(k.len), 0.5);
+    u.segs.push({kind:"task", task:id, from:k.a, to:k.b, d:k.len, t0:t, t1:t+D});
+    EVENTS.push({t, uav:u.id, msg:`task_started #${id}`});
+    t += D; p = k.b;
+    EVENTS.push({t, uav:u.id, msg:`task_finished #${id}`, done:id});
+  }
+  u.tEnd = t;
+}
+EVENTS.sort((a,b)=>a.t-b.t);
+const T_END = Math.max(...U.map(u=>u.tEnd)) + 5;
+
+function stateAt(u, T){
+  if (T < u.segs[0].t0) return {pos:[0,0], v:0, heading:Math.PI/4, seg:null, phase: T < TAKEOFF_S ? "Kalkış" : "Havada"};
+  for (const s of u.segs) if (T <= s.t1) {
+    const [dist, v] = s.d > 0 ? rampAt(s.d, s.t1-s.t0, T-s.t0) : [0,0];
+    const f = s.d > 0 ? dist/s.d : 1;
+    return {pos:[s.from[0]+(s.to[0]-s.from[0])*f, s.from[1]+(s.to[1]-s.from[1])*f], v,
+            heading:Math.atan2(s.to[1]-s.from[1], s.to[0]-s.from[0]), seg:s,
+            phase: s.kind==="task" ? "Görevde" : "Şerit başına"};
+  }
+  const last = u.segs[u.segs.length-1];
+  return {pos:last.to, v:0, heading:Math.atan2(last.to[1]-last.from[1], last.to[0]-last.from[0]), seg:null, phase:"Bitti"};
+}
+
+// ---- Senaryo ve atama kartları ----
+document.getElementById("areaTxt").textContent = fmt(AREA,0) + " m²";
+document.getElementById("obsTxt").textContent = GEOM.obstacles.length;
+document.getElementById("taskTxt").textContent = GEOM.tasks.length;
+document.getElementById("lenTxt").textContent = fmt(totalLen,0) + " m";
+document.getElementById("as1").textContent = U[0].tasks.length + " görev";
+document.getElementById("as2").textContent = U[1].tasks.length + " görev";
+document.getElementById("covNote").innerHTML = `Yaklaşık: şerit uçlarındaki örtüşme ve engel alanı düşülmez. Bu senaryoda bütün görevler bitince en fazla <b class="num">%${fmt(maxCov*100)}</b>.`;
+
+// ---- Ana harita (sabit katmanlar) ----
+const map = document.getElementById("map");
+const defs = el("defs",{},map);
+const glow = el("filter",{id:"glow",x:"-50%",y:"-50%",width:"200%",height:"200%"},defs);
+el("feGaussianBlur",{stdDeviation:"0.8",result:"b"},glow);
+const fm = el("feMerge",{},glow); el("feMergeNode",{in:"b"},fm); el("feMergeNode",{in:"SourceGraphic"},fm);
+for (const u of U) {
+  const g = el("linearGradient",{id:"trail"+u.id,gradientUnits:"userSpaceOnUse"},defs);
+  u.grad = g; el("stop",{offset:"0","stop-color":u.color,"stop-opacity":"0"},g); el("stop",{offset:"1","stop-color":u.color,"stop-opacity":"1"},g);
+}
+const gGrid = el("g",{},map);
+for (let i=0;i<=100;i+=10) {
+  const w = i%50===0 ? .16 : .08;
+  el("line",{x1:i,y1:0,x2:i,y2:100,stroke:"#1b2531","stroke-width":w},gGrid);
+  el("line",{x1:0,y1:i,x2:100,y2:i,stroke:"#1b2531","stroke-width":w},gGrid);
+}
+el("polygon",{points:ptsAttr(GEOM.boundary),fill:"rgba(124,196,255,.025)",stroke:"#9fb3c8","stroke-width":.35},map);
+const L = {};
+for (const k of ["swath","strips","ids","obst","plan","trail","uav"]) L[k] = el("g",{"data-layer":k},map);
+const SW = {}, ST = {};
+for (const t of GEOM.tasks) {
+  SW[t.id] = el("line",{x1:t.a[0],y1:Y(t.a[1]),x2:t.b[0],y2:Y(t.b[1]),stroke:"rgba(46,204,113,.17)","stroke-width":3,display:"none"},L.swath);
+  ST[t.id] = el("line",{x1:t.a[0],y1:Y(t.a[1]),x2:t.b[0],y2:Y(t.b[1]),stroke:C.strip,"stroke-width":.35,"stroke-linecap":"round"},L.strips);
+  const tx = el("text",{x:(t.a[0]+t.b[0])/2,y:Y((t.a[1]+t.b[1])/2)-.4,"font-size":1.5,fill:"#8a98ab","text-anchor":"middle","font-family":"monospace"},L.ids); tx.textContent = t.id;
+}
+L.ids.style.display = "none";
+for (const p of GEOM.obstacles) el("polygon",{points:ptsAttr(p),fill:"#4d5866",stroke:"#8592a3","stroke-width":.25,"stroke-linejoin":"round"},L.obst);
+for (const u of U) {
+  u.planEl = el("polyline",{fill:"none",stroke:"#cfd8e3","stroke-width":.3,"stroke-dasharray":"1.2 1",opacity:.75},L.plan);
+  u.trailEl = el("polyline",{fill:"none",stroke:`url(#trail${u.id})`,"stroke-width":.6,"stroke-linejoin":"round","stroke-linecap":"round"},L.trail);
+  const g = el("g",{},L.uav); u.g = g;
+  el("circle",{r:3.4,fill:u.color,opacity:.13},g);
+  el("circle",{r:1.35,fill:"#0b0f14",stroke:u.color,"stroke-width":.5},g);
+  u.arrow = el("path",{d:"M3.3 0 L1.6 -1.1 L1.6 1.1Z",fill:u.color},g);
+  el("circle",{r:.45,fill:u.color},g);
+  const lg = el("g",{transform:"translate(0,-4.8)"},g);
+  el("rect",{x:-4.6,y:-1.75,width:9.2,height:3.3,rx:.7,fill:"#0b0f14",stroke:u.color,"stroke-width":.25},lg);
+  const lt = el("text",{x:0,y:.75,"font-size":2.05,"font-weight":700,fill:"#e6edf5","text-anchor":"middle","font-family":"Segoe UI,Inter,sans-serif"},lg); lt.textContent = "İHA-"+u.id;
+}
+el("path",{d:`M0 ${Y(0)} l2.2 2.6 h-4.4Z`,fill:"none",stroke:"#e6edf5","stroke-width":.3},map);
+const kt = el("text",{x:1.2,y:105.4,"font-size":1.9,fill:"#8a98ab","font-family":"Segoe UI,sans-serif"},map); kt.textContent = "Kalkış (0, 0)";
+const sb = el("g",{transform:"translate(78,104.5)"},map);
+el("rect",{x:0,y:0,width:10,height:.7,fill:"#e6edf5"},sb); el("rect",{x:10,y:0,width:10,height:.7,fill:"#5c6a7d"},sb);
+for (const [x,s] of [[0,"0"],[10,"10"],[20,"20 m"]]) { const t=el("text",{x,y:-.7,"font-size":1.7,fill:"#8a98ab","text-anchor":"middle","font-family":"monospace"},sb); t.textContent=s; }
+const na = el("g",{transform:"translate(104.5,3)"},map);
+el("path",{d:"M0 -2.6 L1.5 1.8 L0 .9 L-1.5 1.8Z",fill:"#e6edf5"},na);
+const nt = el("text",{x:0,y:5,"font-size":2,fill:"#e6edf5","text-anchor":"middle","font-weight":700},na); nt.textContent = "K";
+for (const i of [0,50,100]) {
+  const a=el("text",{x:i,y:-2.2,"font-size":1.7,fill:"#5c6a7d","text-anchor":"middle","font-family":"monospace"},map); a.textContent=i;
+  const b=el("text",{x:-2,y:Y(i)+.6,"font-size":1.7,fill:"#5c6a7d","text-anchor":"end","font-family":"monospace"},map); b.textContent=i;
+}
+document.querySelectorAll("#layers input").forEach(cb => cb.addEventListener("change", () => {
+  L[cb.dataset.l].style.display = cb.checked ? "" : "none";
+}));
+
+// ---- Mini harita: sahiplik ----
+const mini = document.getElementById("mini");
+el("polygon",{points:ptsAttr(GEOM.boundary),fill:"#0f151d",stroke:"#9fb3c8","stroke-width":.5},mini);
+for (const u of U) for (const id of u.tasks) { const t=byId[id]; el("line",{x1:t.a[0],y1:Y(t.a[1]),x2:t.b[0],y2:Y(t.b[1]),stroke:u.color,"stroke-width":.6,opacity:.85},mini); }
+for (const p of GEOM.obstacles) el("polygon",{points:ptsAttr(p),fill:"#4d5866"},mini);
+for (const u of U) u.miniDot = el("circle",{r:1.9,fill:"#0b0f14",stroke:"#fff","stroke-width":.55},mini);
+
+// ---- Zaman çizelgesi ----
+const ch = document.getElementById("chart");
+const X0=38, X1=508, Y0=160, Y1=14;
+const sx = t => X0 + (X1-X0)*t/T_END, sy = p => Y0 - (Y0-Y1)*p/100;
+for (const p of [0,25,50,75,100]) {
+  el("line",{x1:X0,x2:X1,y1:sy(p),y2:sy(p),stroke:"#1f2a38","stroke-width":1},ch);
+  const t=el("text",{x:X0-6,y:sy(p)+4,"font-size":10,fill:"#5c6a7d","text-anchor":"end","font-family":"monospace"},ch); t.textContent="%"+p;
+}
+const step = T_END > 900 ? 300 : 60;
+for (let s=0;s<=T_END;s+=step) { const t=el("text",{x:sx(s),y:Y0+16,"font-size":10,fill:"#5c6a7d","text-anchor":"middle","font-family":"monospace"},ch); t.textContent=mmss(s); }
+el("line",{x1:X0,x2:X1,y1:sy(maxCov*100),y2:sy(maxCov*100),stroke:"#2ecc71","stroke-dasharray":"3 4","stroke-width":1,opacity:.5},ch);
+const ml = el("text",{x:X0+4,y:sy(maxCov*100)-4,"font-size":9.5,fill:"#2ecc71",opacity:.75},ch); ml.textContent = `fiziksel kapsama üst sınırı %${fmt(maxCov*100)}`;
+const lineT = el("polyline",{fill:"none",stroke:"#7cc4ff","stroke-width":1.8},ch);
+const lineC = el("polyline",{fill:"none",stroke:"#2ecc71","stroke-width":1.8},ch);
+const nowLine = el("line",{y1:Y1,y2:Y0,stroke:"#f5c451","stroke-width":1,opacity:.6},ch);
+const lgd = el("g",{transform:`translate(${X1-200},${Y0-10})`},ch);
+el("line",{x1:0,x2:14,y1:0,y2:0,stroke:"#7cc4ff","stroke-width":2},lgd); const l1=el("text",{x:18,y:3.5,"font-size":10,fill:"#cfd8e3"},lgd); l1.textContent="Görev tamamlama";
+el("line",{x1:108,x2:122,y1:0,y2:0,stroke:"#2ecc71","stroke-width":2},lgd); const l2=el("text",{x:126,y:3.5,"font-size":10,fill:"#cfd8e3"},lgd); l2.textContent="Fiziksel kapsama";
+
+// ---- Kare çizimi ----
+const $ = id => document.getElementById(id);
+function render(T){
+  const done = new Set(EVENTS.filter(e => e.done && e.t <= T).map(e => e.done));
+  const st = U.map(u => stateAt(u, T));
+  const active = new Map(); st.forEach((s,i) => { if (s.seg && s.seg.kind==="task") active.set(s.seg.task, U[i]); });
+  const next = new Map(); st.forEach((s,i) => { if (s.seg && s.seg.kind==="transit") next.set(s.seg.task, U[i]); });
+  for (const t of GEOM.tasks) {
+    const a = active.get(t.id), n = next.get(t.id), d = done.has(t.id);
+    const e = ST[t.id];
+    e.setAttribute("stroke", a ? a.color : d ? C.done : n ? n.color : C.strip);
+    e.setAttribute("stroke-width", a ? 1.0 : d ? .45 : n ? .5 : .35);
+    e.setAttribute("stroke-dasharray", n && !a ? "1 .8" : "");
+    e.setAttribute("filter", a ? "url(#glow)" : "");
+    SW[t.id].setAttribute("display", d ? "" : "none");
+  }
+  U.forEach((u,i) => {
+    const s = st[i];
+    u.g.setAttribute("transform", `translate(${s.pos[0]},${Y(s.pos[1])})`);
+    u.arrow.setAttribute("transform", `rotate(${-s.heading*180/Math.PI})`);
+    u.miniDot.setAttribute("cx", s.pos[0]); u.miniDot.setAttribute("cy", Y(s.pos[1]));
+    // iz: son TRAIL_S saniye, eskiden yeniye solan
+    const pts = []; for (let k=Math.max(0,T-TRAIL_S); k<T; k+=0.5) pts.push(stateAt(u,k).pos); pts.push(s.pos);
+    u.trailEl.setAttribute("points", pts.map(([x,y])=>`${x},${Y(y)}`).join(" "));
+    const p0 = pts[0]; u.grad.setAttribute("x1", p0[0]); u.grad.setAttribute("y1", Y(p0[1])); u.grad.setAttribute("x2", s.pos[0]); u.grad.setAttribute("y2", Y(s.pos[1]));
+    // planlanan rota: mevcut ayağın sonu + sonraki 2 görev
+    const plan = [s.pos]; let idx = s.seg ? u.segs.indexOf(s.seg) : (T < u.segs[0].t0 ? -1 : u.segs.length);
+    if (idx >= 0 && idx < u.segs.length) plan.push(u.segs[idx].to);
+    for (const sg of u.segs.slice(Math.max(idx+1,0), Math.max(idx+1,0)+4)) plan.push(sg.to);
+    u.planEl.setAttribute("points", plan.map(([x,y])=>`${x},${Y(y)}`).join(" "));
+    // İHA kartı
+    const nDone = u.tasks.filter(id => done.has(id)).length;
+    const act = s.seg ? `#${s.seg.task}` : "—";
+    const badgeCls = s.phase==="Görevde" ? "go" : s.phase==="Bitti" ? "end" : "mid";
+    $("uav"+u.id).innerHTML = `
+      <div class="uavhead"><span style="width:10px;height:10px;border-radius:50%;background:${u.color}"></span>
+        <b>İHA-${u.id}</b><span class="sid">Sistem ID ${u.id}</span><span class="badge ${badgeCls}">${s.phase}</span></div>
+      <div class="grid2">
+        <div class="metric"><span>Hız</span><span class="num">${fmt(s.v,2)} m/s</span></div>
+        <div class="metric"><span>İrtifa</span><span class="num">${T<TAKEOFF_S?fmt(2.5*T/TAKEOFF_S,2):"2,50"} m</span></div>
+        <div class="metric"><span>Mod</span><span class="num">${T<TAKEOFF_S?"TAKEOFF":s.phase==="Bitti"?"HOLD":"OFFBOARD"}</span></div>
+        <div class="metric"><span>${s.phase==="Şerit başına"?"Sıradaki":"Aktif görev"}</span><span class="num">${act}</span></div>
+        <div class="metric"><span>Tamamlanan</span><span class="num">${nDone} / ${u.tasks.length}</span></div>
+        <div class="metric"><span>Pil</span><span class="na">— A4</span></div>
+      </div>
+      <div class="bar"><i style="width:${nDone/u.tasks.length*100}%"></i></div>
+      <div class="src">Hız, irtifa, mod: PX4 telemetrisi · aktif/tamamlanan: görev olayları · <span class="sample">örnek</span></div>`;
+  });
+  // oranlar
+  const doneLen = [...done].reduce((s,id)=>s+byId[id].len,0);
+  const taskPct = done.size/GEOM.tasks.length*100, covPct = doneLen*3/AREA*100;
+  $("taskPct").textContent = "%" + fmt(taskPct);
+  $("taskSub").innerHTML = `<span class="num">${done.size} / ${GEOM.tasks.length}</span> görev <span class="sample">örnek</span>`;
+  $("taskBar").style.width = taskPct + "%";
+  $("covPct").textContent = "%" + fmt(covPct);
+  $("covSub").innerHTML = `<span class="num">${fmt(doneLen*3,0)} m²</span> <span class="sample">örnek</span>`;
+  $("covBar").style.width = covPct + "%";
+  // grafik
+  let n=0, len=0; const pT=[[sx(0),sy(0)]], pC=[[sx(0),sy(0)]];
+  for (const e of EVENTS) { if (!e.done) continue; if (e.t > T) break;
+    pT.push([sx(e.t),sy(n/GEOM.tasks.length*100)]); pC.push([sx(e.t),sy(len*3/AREA*100)]);
+    n++; len+=byId[e.done].len;
+    pT.push([sx(e.t),sy(n/GEOM.tasks.length*100)]); pC.push([sx(e.t),sy(len*3/AREA*100)]); }
+  pT.push([sx(T),sy(n/GEOM.tasks.length*100)]); pC.push([sx(T),sy(len*3/AREA*100)]);
+  lineT.setAttribute("points", pT.map(p=>p.join(",")).join(" "));
+  lineC.setAttribute("points", pC.map(p=>p.join(",")).join(" "));
+  nowLine.setAttribute("x1", sx(T)); nowLine.setAttribute("x2", sx(T));
+  // günlük
+  const rows = EVENTS.filter(e => e.t <= T).slice(-9).reverse();
+  $("log").innerHTML = rows.map(e => `<div><span class="t">${mmss(e.t)}</span><span style="color:${e.uav===1?C.u1:C.u2}">İHA-${e.uav}</span><span>${e.msg}</span></div>`).join("")
+    + `<div><span class="t">00:00</span><span style="color:#8a98ab">—</span><span>assignment · source=manual</span></div>`;
+  $("elapsed").textContent = " " + mmss(T);
+  $("clock").textContent = `${mmss(T)} / ${mmss(T_END)}`;
+  $("seek").value = Math.round(T/T_END*1000);
+}
+
+// ---- Oynatma (yalnızca maket) ----
+const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+const params = new URLSearchParams(location.search);
+let T = params.has("t") ? Math.min(+params.get("t"), T_END) : 0;
+let playing = !reduce && !params.has("t");
+let last = null;
+const playBtn = $("play");
+const setPlay = p => { playing = p; playBtn.textContent = p ? "❚❚" : "▶"; last = null; };
+playBtn.onclick = () => setPlay(!playing);
+$("restart").onclick = () => { T = 0; render(T); setPlay(true); };
+$("seek").oninput = e => { T = e.target.value/1000*T_END; render(T); };
+function tick(now){
+  if (playing) {
+    if (last !== null) { T += (now-last)/1000 * +$("speed").value; if (T >= T_END) { T = T_END; setPlay(false); } render(T); }
+    last = now;
+  }
+  requestAnimationFrame(tick);
+}
+setPlay(playing); render(T); requestAnimationFrame(tick);
+</script>
+</body>
+</html>
