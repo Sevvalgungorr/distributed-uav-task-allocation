@@ -342,7 +342,7 @@ Her commit'ten önce `pytest`; uçuşa dokunan değişikliklerden sonra simülas
 
 # CBBA — Dağıtık görev atama
 
-> Durum: **K1 (Choi 2009 PDF'iyle doğrulama) ve K16 (İHA arıza olasılığı, aday) dışında kararlar alındı.** K7 25 Kasım 2026'da kaynaklarıyla onaylandı. CBBA kodu henüz yazılmadı.
+> Durum: **K1 (Choi 2009 PDF'iyle doğrulama) dışında kararlar alındı.** K7 25 Kasım 2026'da kaynaklarıyla onaylandı. K16 aynı gün onaylandı (deney tasarımı, kaynak değil). CBBA kodu henüz yazılmadı.
 
 **Kaynaklar ve kısaltmalar:**
 - **[G §V-A], [G Eq. 7]** = Grøntved, Lundquist, Christensen, "Decentralized Multi-UAV Trajectory Task Allocation in Search and Rescue Applications", ICAR 2023, DOI 10.1109/icar58858.2023.10406912. Yazarların kabul edilmiş son taslağı, 8 sayfa; `~/makaleler/Grontved2023.pdf` (repoda değil).
@@ -526,7 +526,7 @@ A0 harita / Gazebo işaretçileri      → aynı kod; panelde "CBBA"
 | **K13** | Mesafe nasıl hesaplanacak | ✅ **Onaylandı** | Engellerden kaçınan en kısa yol, yazarlar gibi `extremitypathfinder` ile (pip; lisansı kurulumda kontrol edilecek). Engel %95 ve sınır %101 ölçeği de taklit edilir. **Gerekçe:** D1 karşılaştırması aynı maliyet modelini gerektirir. Alternatif: shapely + networkx ile kendi görünürlük grafiğimiz (daha çok iş, aynı sonucu verdiği ayrıca test edilmeli). |
 | **K14** | Kodun makale metninden ayrıldığı noktalar: (a) yön yalnızca önceki göreve göre seçiliyor, başa eklemede seçilmiyor; (b) depot dönüş terimi puan hesabının yalnızca bir tarafında; (c) kapasite eklemeden önce kontrol ediliyor | ✅ **Onaylandı: iki mod** |  **`paper_compat`** (D1–D3): T23'ün davranışını olduğu gibi uygular; makale ve sonuç dosyalarıyla karşılaştırma bununla yapılır. **`corrected`** (D4–D6): makale metnine (Eq. 8) göre her iki yön ve her ekleme yeri, iki puan hesabında aynı terimler, kapasite aşılmaz; iki mod arasındaki fark ayrıca raporlanır. **Gerekçe:** Makalenin yayımlanan sayıları T23 ile üretildi; projenin kendi deneyleri makale metnindeki tanıma uygun bir uygulamayla yapılmalı. |
 | **K15** | D1 kapasitesi | ✅ **Onaylandı** | Ana tablo **1200 s** (makale metni); ek olarak **1500 s** (sonuç dosyası). **Gerekçe:** C10'da gözlemlenen farkı açıkça göstermek. |
-| **K16** | İHA arıza olasılığı (D5) | ⏳ **Aday — karar bekliyor** | Aday kaynak: Aznar 2026 §5.1, §6.4.2: kalıcı ajan arızası "0.01% and 0.1% per step after an initial 500s grace period"; temel durum %0. **Sorun:** makalede "adım" (step) süresi tanımlı değil (SimPy ayrık olay simülasyonu, §5.1). Adım süresi bilinmeden olasılık bizim zaman birimimize çevrilemez. Ayrıca bu olasılıklar uçuş sırasındaki (yürütme) arızalar için; CBBA'nın atama aşamasında ise "adım" CBBA turudur ve süresi farklıdır. **Seçenekler:** (a) yazarlara/koda bakıp adım süresini doğrulamak; (b) olasılık yerine deterministik senaryo: belirli bir İHA belirli bir anda düşer (kaynak gerektirmez, yeniden atamayı göstermek için yeterli); (c) değerleri "adım = 1 s" varsayımıyla kullanmak — varsayım kaynaksız olduğu için yalnızca **test ayarı** olur. |
+| **K16** | İHA arızası (D5) | ✅ **Onaylandı (25 Kasım 2026): belirlenmiş senaryo.** ⚠️ **Deney tasarımı — kaynak değil, bizim seçimimiz.** | **Arıza anı:** kapasitenin (`L_t`) **%25, %50, %75**'i (erken / orta / geç arıza). Kapasiteye oransal olduğu için D2'deki farklı `L_t` değerlerinde (1500/750/600/500 s) karşılaştırılabilir. **Düşen İHA:** (1) **en etkili durum:** arıza anında en çok kalan görevi olan İHA (kalan görev = yolunda olup henüz başlanmamış görevler; eşitlikte küçük kimlik, K1/K8 ile tutarlı — bu eşitlik kuralı da bizim seçimimiz); (2) **rastgele seçilen İHA**, 10 tohum: **test ayarı.** Olasılıklı arıza modeli kullanılmıyor; Aznar 2026'nın olasılıkları (adım süresi tanımsız) kullanılmadı, yalnızca C9'da ilgili çalışma olarak anılıyor. |
 
 ## C9. Kaynak notları
 
@@ -537,10 +537,11 @@ A0 harita / Gazebo işaretçileri      → aynı kod; panelde "CBBA"
   - Choi 2009: MIT DSpace 429 hatası verdi; kullanıcı tarayıcıdan İndirilenler'e indirecek, `~/makaleler/Choi2009.pdf` olarak kopyalanıp K1 doğrulanacak.
   - Turner 2017: K5 koddan çözüldüğü için şimdilik gerekmiyor.
   - Zeng 2019 ve Rodrigues 2021: A4'ten önce gerekli.
-- **K7 ve K16 kaynakları** (arXiv'den indirildi, 25 Kasım 2026):
+- **K7 kaynakları** (arXiv'den indirildi, 25 Kasım 2026):
   - **[Aznar 2026]** = Aznar, Pujol, Díez, "Event-Triggered Adaptive Consensus for Multi-Robot Task Allocation", arXiv:2604.06813 (v1, 2026), `~/makaleler/Aznar2026_EventTriggeredCBBA.pdf`.
   - **[Liu 2026]** = Liu, Zhang, "CC-OPI: Online Distributed Task Allocation for UAV Swarms under Communication Constraints", arXiv:2609.19208 (v1, 2026), `~/makaleler/Liu2026_CCOPI.pdf`.
   - İkisi de arXiv ön baskısı (hakem onayından geçmemiş olabilir); raporda bu belirtilir.
+- **İlgili çalışma (arıza, K16 kaynağı değil):** Aznar 2026 kalıcı ajan arızasını olasılıklı modelliyor: "0.01% and 0.1% per step after an initial 500s grace period" (§5.1, §6.4.2). "Adım" süresi tanımlı değil (SimPy ayrık olay simülasyonu) ve 500 s bekleme bizim kapasitelerimizle (500–1500 s) uyumsuz; bu yüzden D5'te kullanılmadı.
 - **İlgili çalışma (K7 kaynağı değil):** Sao, Ho, Bhore, Sujit, "Event Driven CBBA with Reduced Communication", arXiv:2509.06481 (2025), `~/makaleler/Sao2025_EventDrivenCBBA.pdf`. Olay tetiklemeli CBBA ile yayın sayısını %52'ye kadar azaltıyor (§IV: 100 m × 100 m, 5–50 İHA, 100 Monte Carlo). Paket kaybı deneyi yok; kayıp yalnızca motivasyon (§III) ve gelecek çalışma (§V) olarak geçiyor.
 
 ## C10. Gözlemlenen farklar: makale metni ve yazarların sonuç dosyaları
