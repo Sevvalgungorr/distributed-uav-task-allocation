@@ -291,6 +291,8 @@ fly_task.py ── mission_events UDP 15600 ──┤
 
 ### A0.2 — Temel Gazebo dünyası · **CBBA öncesi**
 
+> ✅ **Uygulandı ve denendi (26 Kasım 2026):** PX4 çalışan dünyaya bağlandı, x500_0 (0,0)'da doğdu, `PX4_GZ_NO_FOLLOW=1` kamerayı serbest bıraktı, içbükey engeller düzgün, RTF ≈ %93–100. Hizalama logdan ölçüldü (`docs/anlatim_notlari.md` 1.5). Plandan farklar: `GZ_IP` ön eki gereksiz (PX4 de ayarlamıyor); GUI ayarı da üretiliyor (`worlds/<ad>.gui.config`, commit edilmiyor); ızgara (`GridConfig`) eklenmedi.
+
 **Mekanizma:** GeoJSON → SDF 1.9 dünya üreticisi. Fizik, `spherical_coordinates`, `magnetic_field` ve `atmosphere` değerleri PX4'ün `default.sdf` dosyasından **okunarak** kopyalanır (PX4 dosyasına yazılmaz).
 
 **Sahne içeriği:**
@@ -308,7 +310,7 @@ fly_task.py ── mission_events UDP 15600 ──┤
 ```bash
 # Terminal 0: Gazebo, PX4 eklenti ayarlarıyla
 source ~/PX4-Autopilot/build/px4_sitl_default/gz_env.sh   # yalnızca okunur
-GZ_IP=127.0.0.1 gz sim -r ~/suruiha/worlds/ac10_0000.sdf --gui-config ~/suruiha/worlds/gui_ac10.config
+gz sim -r ~/suruiha/worlds/ac10_0000.sdf --gui-config ~/suruiha/worlds/ac10_0000.gui.config
 # Terminal 1 ve 2: mevcut PX4 komutları + PX4_GZ_NO_FOLLOW=1
 ```
 

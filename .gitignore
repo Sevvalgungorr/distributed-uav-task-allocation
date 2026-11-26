@@ -18,3 +18,6 @@ Thumbs.db
 .env.*
 !.env.example
 .pytest_cache/
+# Uretilen Gazebo dunyalari (swarm_viz/make_world.py ile yeniden uretilir)
+worlds/*.sdf
+worlds/*.gui.config
