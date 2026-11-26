@@ -12,8 +12,14 @@ Koordinat dönüşümü:
 - Veri seti x ekseni -> PX4 yerel doğu (east), y ekseni -> PX4 yerel kuzey (north).
 - Veri seti koordinatları metre kabul edilir (1 birim = 1 m).
 
-UYARI: Veri setindeki engeller (obstacles) Gazebo dünyasında fiziksel olarak YOKTUR.
-Bu uçuş yalnızca gösterim amaçlıdır; engelden kaçınma veya çarpışma kontrolü yapılmaz.
+Geçiş ayakları (bir önceki noktadan görevin başlangıcına) engellerden kaçınan en kısa yolu
+izler (swarm_core/environment.py, docs/cbba_plan.md K13). Yolun her köşesinde İHA durur ve
+sonraki köşeye yeni bir hız rampasıyla başlar. Not: yazarların maliyet modeli geçişi tek bir
+rampa sayar (köşelerde durmaz); bu fark yalnızca gösterim uçuşunu yavaşlatır, CBBA maliyetini
+etkilemez. Şerit uçuşu (başlangıç -> bitiş) değişmedi: tek düz çizgi.
+
+UYARI: Veri setindeki engeller Gazebo'da yalnızca görseldir (çarpışma yok, swarm_viz/make_world.py).
+Engelden kaçınma yol planlamasıyla yapılır; çarpışma algılama yoktur.
 
 Görselleştirme: Görev ataması (source="manual") ve görev olayları yerel UDP'ye gönderilir
 (swarm_sim/mission_events.py, docs/cbba_plan.md A0.0.5). Dinleyen yoksa uçuş etkilenmez.
@@ -34,6 +40,7 @@ from mavsdk.asyncio.plugins.offboard import (
 from mavsdk.asyncio.plugins.telemetry import TelemetryAsync
 
 from swarm_core.dataset import load_boundary, load_obstacles, load_tasks
+from swarm_core.environment import Environment
 from swarm_sim.mission_events import MissionEventSender
 from swarm_sim.takeoff_land import (
     CONNECTION_URL,
@@ -73,6 +80,22 @@ class LocalFrame:
 
     def to_dataset(self, north, east):
         return (east - self.origin_east + self.min_x, north - self.origin_north + self.min_y)
+
+
+def transit_waypoints(env, here, goal, min_step=ARRIVAL_TOLERANCE_M):
+    """here -> goal engelden kaçınan yolun uçulacak köşeleri (here hariç, goal dahil) ve uzunluğu.
+
+    Bir öncekine min_step'ten yakın ara köşeler atlanır (ör. engel içinden taşınan uçların
+    birkaç cm'lik bağlantısı); hedef nokta hiçbir zaman atlanmaz.
+    """
+    path, length = env.shortest_path(here, goal)
+    points, last = [], path[0]
+    for p in path[1:-1]:
+        if math.dist(p, last) >= min_step:
+            points.append(p)
+            last = p
+    points.append(path[-1])
+    return points, length
 
 
 async def print_position(telemetry, frame, label):
@@ -152,11 +175,12 @@ async def main(scenario_path, task_ids):
     min_x = min(x for x, _ in boundary)
     min_y = min(y for _, y in boundary)
 
+    env = Environment(boundary, obstacles)
     print(f"Senaryo: {scenario_path}, {len(all_tasks)} gorev, {len(obstacles)} engel")
     if obstacles:
         print(
-            "UYARI: Veri setindeki engeller Gazebo'da fiziksel olarak YOK. "
-            "Bu ucus yalnizca gosterim amaclidir; engelden kacinma yapilmaz."
+            "Not: gecisler engellerden kacinan en kisa yolu izler (K13). "
+            "Engeller Gazebo'da yalnizca gorsel; carpisma algilama yok."
         )
     for task in selected:
         (sx, sy), (ex, ey) = task.waypoints
@@ -216,13 +240,20 @@ async def main(scenario_path, task_ids):
             await run_step("4. Offboard baslat", offboard.start())
             print("  Offboard modu aktif.")
 
+            here = (min_x, min_y)  # kalkış noktası (veri seti); sonra her şeridin bitiş noktası
             for n, task in enumerate(selected, start=1):
                 (sx, sy), (ex, ey) = task.waypoints
                 prefix = f"5.{n} Gorev {task.task_id} ({n}/{len(selected)})"
-                await run_step(
-                    f"{prefix}: baslangica ucus ({sx:.2f}, {sy:.2f})",
-                    fly_to(offboard, telemetry, frame, frame.to_ned(sx, sy), down_m, yaw_deg),
+                via, length = transit_waypoints(env, here, (sx, sy))
+                print(
+                    f"\n  {prefix}: gecis yolu {len(via)} ayak, {length:.2f} m "
+                    f"(duz cizgi {math.dist(here, (sx, sy)):.2f} m)"
                 )
+                for k, (wx, wy) in enumerate(via, start=1):
+                    await run_step(
+                        f"{prefix}: gecis {k}/{len(via)} -> ({wx:.2f}, {wy:.2f})",
+                        fly_to(offboard, telemetry, frame, frame.to_ned(wx, wy), down_m, yaw_deg),
+                    )
                 events.send_event(system_id, "task_started", task.task_id)
                 await run_step(
                     f"{prefix}: tarama cizgisi -> ({ex:.2f}, {ey:.2f})",
@@ -230,6 +261,7 @@ async def main(scenario_path, task_ids):
                 )
                 events.send_event(system_id, "task_finished", task.task_id)
                 print(f"  Gorev {task.task_id} tamamlandi.")
+                here = (ex, ey)
 
             await run_step("6a. Offboard durdur", offboard.stop())
             await run_step("6b. Inis komutu", action.land())
@@ -238,8 +270,6 @@ async def main(scenario_path, task_ids):
             events.send_event(system_id, "landed")
 
             print(f"\n{len(selected)} gorevlik ucus basariyla tamamlandi.")
-            if obstacles:
-                print("Hatirlatma: engeller Gazebo'da yoktu; ucus yalnizca gosterim amacliydi.")
 
         except (StepFailed, OffboardError) as e:
             print(f"\nHATA: {e}")
