@@ -96,6 +96,22 @@ def test_camera_looks_at_area_center():
     assert math.atan2(50 - y, 50 - x) == pytest.approx(yaw, abs=1e-3)
 
 
+def test_camera_is_closest_pose_that_fits_whole_area():
+    from swarm_viz.make_world import _screen_extent
+    square = [(0, 0), (100, 0), (100, 100), (0, 100)]
+    x, y, z, *_ = map(float, camera_pose(square).split())
+    corners = [(px, py, 0.0) for px, py in square]
+    for aspect in cfg.CAMERA_ASPECTS:  # bütün köşeler ekranda
+        assert _screen_extent((x, y, z), (50, 50, 0), corners, cfg.CAMERA_HFOV_DEG, aspect) <= cfg.CAMERA_FIT_MARGIN
+    # 1 m daha yaklaşınca en az bir ekran oranında sığmıyor: gerçekten en yakın nokta
+    el, az = math.radians(cfg.CAMERA_ELEVATION_DEG), math.radians(cfg.CAMERA_AZIMUTH_DEG)
+    d = math.hypot(x - 50, y - 50) - 1.0
+    closer = (50 - d * math.cos(az), 50 - d * math.sin(az), d * math.tan(el))
+    assert any(_screen_extent(closer, (50, 50, 0), corners, cfg.CAMERA_HFOV_DEG, a) > cfg.CAMERA_FIT_MARGIN
+               for a in cfg.CAMERA_ASPECTS)
+
+
 def test_gui_config_only_camera_changes():
     gui = build_gui_config(SCENARIO)
     assert gui.count("<camera_pose>") == 1 and "MarkerManager" in gui  # adım 3 için işaretçi eklentisi açık
+    assert f"<horizontal_fov>{cfg.CAMERA_HFOV_DEG:g}</horizontal_fov>" in gui

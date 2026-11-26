@@ -136,21 +136,60 @@ def build_world(scenario_path, px4_world=PX4_DEFAULT_WORLD):
     return ET.ElementTree(sdf), {"name": name, "tasks": len(tasks), "obstacles": len(obstacles), "skipped": skipped}
 
 
+def _screen_extent(cam, target, points, hfov_deg, aspect):
+    """Noktaların ekrandaki en büyük |x| veya |y| değeri (1 = tam ekran kenarı).
+
+    Basit iğne deliği kamera modeli: kamera `target`a bakar, ufuk yataydır.
+    """
+    f = [t - c for t, c in zip(target, cam)]
+    n = math.sqrt(sum(v * v for v in f))
+    f = [v / n for v in f]
+    r = [f[1], -f[0], 0.0]                      # f × z (sağ vektör)
+    rn = math.hypot(r[0], r[1])
+    r = [r[0] / rn, r[1] / rn, 0.0]
+    u = [r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]]  # r × f
+    th = math.tan(math.radians(hfov_deg) / 2)
+    tv = th / aspect
+    worst = 0.0
+    for p in points:
+        v = [p[i] - cam[i] for i in range(3)]
+        depth = sum(v[i] * f[i] for i in range(3))
+        if depth <= 0:
+            return math.inf
+        sx = sum(v[i] * r[i] for i in range(3)) / depth / th
+        sy = sum(v[i] * u[i] for i in range(3)) / depth / tv
+        worst = max(worst, abs(sx), abs(sy))
+    return worst
+
+
 def camera_pose(boundary):
-    """Alanın tamamını gösteren sabit çapraz-üst kamera: 'x y z roll pitch yaw'."""
+    """Alanın tamamını gösteren EN YAKIN sabit kamera: 'x y z roll pitch yaw'.
+
+    Kamera alan merkezine bakar; yönü ve eğimi viz_config'ten gelir. Uzaklık, sınırın bütün
+    köşeleri her iki ekran oranında da CAMERA_FIT_MARGIN içine sığana kadar 0,5 m adımla artırılır.
+    """
     xs, ys = [p[0] for p in boundary], [p[1] for p in boundary]
     cx, cy = (min(xs) + max(xs)) / 2, (min(ys) + max(ys)) / 2
-    dx, dy, z = cfg.CAMERA_OFFSET_M
-    yaw = math.atan2(-dy, -dx)                      # merkeze doğru bak
-    pitch = math.atan2(z, math.hypot(dx, dy))       # aşağı eğim (Gazebo'da pozitif = aşağı)
-    return f"{_f(cx + dx)} {_f(cy + dy)} {_f(z)} 0 {_f(pitch)} {_f(yaw)}"
+    az, el = math.radians(cfg.CAMERA_AZIMUTH_DEG), math.radians(cfg.CAMERA_ELEVATION_DEG)
+    corners = [(x, y, 0.0) for x, y in boundary]
+    d = 1.0
+    while True:
+        cam = (cx - d * math.cos(az), cy - d * math.sin(az), d * math.tan(el))
+        if all(_screen_extent(cam, (cx, cy, 0.0), corners, cfg.CAMERA_HFOV_DEG, a) <= cfg.CAMERA_FIT_MARGIN
+               for a in cfg.CAMERA_ASPECTS):
+            break
+        d += 0.5
+    yaw = az                     # merkeze doğru bak
+    pitch = el                   # aşağı eğim (Gazebo'da pozitif = aşağı)
+    return f"{_f(cam[0])} {_f(cam[1])} {_f(cam[2])} 0 {_f(pitch)} {_f(yaw)}"
 
 
 def build_gui_config(scenario_path, base_gui=GZ_DEFAULT_GUI):
-    """Gazebo'nun varsayılan GUI ayarını okur, yalnızca kamera konumunu değiştirir."""
+    """Gazebo'nun varsayılan GUI ayarını okur; yalnızca kamera konumunu ve görüş açısını değiştirir."""
     text = Path(base_gui).read_text()
     pose = camera_pose(load_boundary(scenario_path))
-    new, n = re.subn(r"<camera_pose>.*?</camera_pose>", f"<camera_pose>{pose}</camera_pose>", text, count=1)
+    camera = f"<camera_pose>{pose}</camera_pose>\n  <horizontal_fov>{_f(cfg.CAMERA_HFOV_DEG)}</horizontal_fov>"
+    new, n = re.subn(r"<camera_pose>.*?</camera_pose>", camera, text, count=1)
     if n != 1:
         raise ValueError(f"{base_gui} icinde <camera_pose> bulunamadi")
     return new

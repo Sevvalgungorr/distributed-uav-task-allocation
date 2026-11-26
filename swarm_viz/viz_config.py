@@ -22,6 +22,11 @@ BOUNDARY_COLOR = (0.95, 0.95, 0.95)
 MIN_STRIP_LENGTH_M = 0.05            # bundan kısa şerit kutu yerine küçük kare olarak çizilir
 
 # --- Sabit kamera (A0.3) ---
-# Alanın güneybatısından, kuzeydoğuya bakan çapraz-üst görünüm.
-# Konum alan merkezine göre verilir: (geri_x, geri_y, yükseklik) metre.
-CAMERA_OFFSET_M = (-65.0, -65.0, 80.0)
+# Alanın güneyinden kuzeye bakan çapraz-üst görünüm. Kamera, alanın dört köşesi ekrana
+# sığacak EN YAKIN noktaya otomatik konur (make_world.camera_pose). Aynı görüş açısında
+# güneyden bakış, güneybatıdan çapraz bakışa göre merkeze ~%30 daha yakın (26 Kasım 2026 hesabı).
+CAMERA_HFOV_DEG = 60.0          # yatay görüş açısı; Gazebo varsayılanı daha geniş ve her şeyi küçültüyor
+CAMERA_ELEVATION_DEG = 45.0     # bakış eğimi (0 = yatay, 90 = tam tepeden)
+CAMERA_AZIMUTH_DEG = 90.0       # kameranın merkeze göre geldiği yön: 90 = güneyden kuzeye bakış
+CAMERA_ASPECTS = (16 / 9, 1000 / 845)  # sığma kontrolü: geniş ekran ve Gazebo varsayılan pencere oranı
+CAMERA_FIT_MARGIN = 0.95        # köşeler ekran kenarının %95'ine kadar
