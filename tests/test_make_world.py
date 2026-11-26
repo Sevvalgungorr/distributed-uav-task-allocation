@@ -68,6 +68,37 @@ def test_obstacles_are_inset_by_half_meter():
                     or original.exterior.distance(Point(x, y)) > cfg.OBSTACLE_INSET_M
 
 
+def test_drawn_obstacle_is_inside_both_shapes():
+    from shapely.affinity import scale
+    from swarm_core.environment import OBSTACLE_SCALE
+    for points in load_obstacles(SCENARIO):
+        original = Polygon(points)
+        inset = original.buffer(-cfg.OBSTACLE_INSET_M, join_style="mitre").buffer(1e-9)
+        planner = scale(original, xfact=OBSTACLE_SCALE, yfact=OBSTACLE_SCALE, origin="centroid").buffer(1e-9)
+        for part in inset_obstacle(points):
+            drawn = Polygon(part)
+            assert inset.contains(drawn) and planner.contains(drawn)
+
+
+def test_planned_paths_never_cross_drawn_obstacles():
+    # Engel 5 köşesi (görev 1 -> 2 geçişi) dahil: planlanan yol çizilen bloğun içine girmemeli
+    import random
+    from shapely.geometry import LineString
+    from swarm_core.dataset import load_boundary
+    from swarm_core.environment import Environment
+    env = Environment(load_boundary(SCENARIO), load_obstacles(SCENARIO))
+    drawn = [Polygon(p).buffer(-1e-6) for o in load_obstacles(SCENARIO) for p in inset_obstacle(o)]
+    tasks = load_tasks(SCENARIO)
+    pairs = [(tasks[0].waypoints[1], tasks[1].waypoints[0])]
+    ends = [p for t in tasks for p in t.waypoints]
+    rng = random.Random(1352323)  # test ayarı
+    pairs += [tuple(rng.sample(ends, 2)) for _ in range(300)]
+    for a, b in pairs:
+        path, _ = env.shortest_path(a, b)
+        line = LineString(path)
+        assert all(line.intersection(d).length < 1e-6 for d in drawn), f"{a} -> {b}"
+
+
 def test_no_strip_enters_inset_obstacle():
     shrunk = [Polygon(p) for o in load_obstacles(SCENARIO) for p in inset_obstacle(o)]
     for task in load_tasks(SCENARIO):

@@ -74,6 +74,12 @@ Yeni özellikler eklendikçe bu dosyanın sonuna yazılır.
 - **Veri nereden:** Geçişin başı bir önceki şeridin bitiş noktası (ilk geçişte kalkış noktası), sonu sıradaki şeridin başı; yol 2.1'deki modülden.
 - **Hocaya nasıl anlatırım:** "Algoritmanın maliyet hesabında kullandığı yol ile İHA'nın Gazebo'da uçtuğu yol aynı fonksiyondan geliyor. Tek fark şu: gösterim uçuşunda İHA köşelerde duruyor; maliyet modelinde durmuyor. Bu yalnızca gösterimi yavaşlatıyor."
 
+### 2.4 Engel çizimi = iki şeklin kesişimi (26 Kasım 2026)
+- **Ne yapıyor:** Gazebo'daki beton blok artık iki şeklin ortak kısmı: her kenarı 0,5 m içeri çekilmiş engel ve yol planlayıcının %95 küçültülmüş engeli. Değişiklik yalnızca sivri köşelerde görülüyor (örneğin engel 5: 280,6 → 275,5 m²).
+- **Neden:** 2.3'teki ölçümde planlanan geçiş, engel 5'in sivri köşesinde çizilen bloğun 3,38 m üstünden geçiyordu. Plan doğruydu ama çizim başka bir yöntemle küçültülmüştü; bu yüzden ekranda İHA bloğun içinden geçiyormuş gibi görünüyordu. Kesişim iki koşulu birden sağlıyor: şeritler bloğun altında kalmıyor ve planlanan yol bloğun üstünden geçmiyor.
+- **Veri nereden:** Engel poligonları veri setinden; %95 ölçeği planlayıcıyla aynı sabit (`swarm_core/environment.py`, `OBSTACLE_SCALE`), 0,5 m görselleştirme ayarı. Testler iki koşulu da kontrol ediyor; görev 1→2 geçişi dahil 301 planlanan yol hiçbir bloğa girmiyor.
+- **Hocaya nasıl anlatırım:** "Sahnedeki blokları algoritmanın kullandığı engel şekliyle uyumlu çizdim. Ekranda gördüğünüz, algoritmanın gerçekten kaçındığı şey."
+
 ### 2.3 Geçişin uçuş logundan ölçümü (26 Kasım 2026)
 - **Ne yapıyor:** Görev 1 bitişinden görev 2 başlangıcına geçişi iki uçuşta karşılaştırıyor: önceki düz çizgi (`10_00_36.ulg`) ve yeni engelden kaçınan yol (`10_36_00.ulg`). Konum Gazebo'nun gerçek konumu (groundtruth).
 - **Sonuç:**

@@ -9,8 +9,8 @@ Kurallar:
   zemin modeli PX4'ün default.sdf dosyasından OKUNARAK kopyalanır; PX4 dosyasına yazılmaz.
   Böylece PX4'ün sensör eklentileri (GPS, manyetometre, barometre) aynı değerlerle çalışır.
 - Şeritler, sınır ve engellerde <collision> yoktur: yalnızca görseldir, uçuşu etkilemez.
-- Engeller veri setindeki poligonun OBSTACLE_INSET_M kadar içeri küçültülmüş hâliyle çizilir;
-  veri setinin geometrisi değişmez.
+- Engeller, veri setindeki poligonun 0,5 m içeriden hâli ile yol planlayıcının %95 hâlinin
+  kesişimi olarak çizilir (inset_obstacle); veri setinin geometrisi değişmez.
 - Koordinatlar: veri seti (x doğu, y kuzey, metre) = Gazebo dünyası (x, y). Dünya (0,0) = veri seti (0,0).
 
 Kullanım:
@@ -23,9 +23,11 @@ import re
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+from shapely.affinity import scale
 from shapely.geometry import MultiPolygon, Polygon
 
 from swarm_core.dataset import load_boundary, load_obstacles, load_tasks
+from swarm_core.environment import OBSTACLE_SCALE
 from swarm_viz import viz_config as cfg
 
 PX4_DEFAULT_WORLD = Path.home() / "PX4-Autopilot/Tools/simulation/gz/worlds/default.sdf"
@@ -42,11 +44,18 @@ def world_name_for(scenario_path):
 
 
 def inset_obstacle(points, inset_m=cfg.OBSTACLE_INSET_M):
-    """Engel poligonunu inset_m kadar içeri küçültür; parça listesi döner (boş olabilir).
+    """Gazebo'da çizilecek engel şekli; parça listesi döner (boş olabilir).
 
+    Çizilen şekil iki şeklin KESİŞİMİDİR (26 Kasım 2026 kararı):
+    - her kenarı inset_m içeri çekilmiş engel  -> engel kenarındaki şeritler bloğun altında kalmaz
+    - yol planlayıcının engeli (ağırlık merkezine göre OBSTACLE_SCALE, swarm_core/environment.py)
+      -> planlanan geçiş yolu hiçbir zaman çizilen bloğun üstünden geçmez
+    Yalnızca birini kullanmak sivri köşelerde görüntü ile planı uyumsuz yapıyordu (engel 5, logla ölçüldü).
     Çok ince bir engel küçültülünce ikiye bölünebilir (MultiPolygon) ya da yok olabilir.
     """
-    shrunk = Polygon(points).buffer(-inset_m, join_style="mitre")
+    original = Polygon(points)
+    planner = scale(original, xfact=OBSTACLE_SCALE, yfact=OBSTACLE_SCALE, origin="centroid")
+    shrunk = original.buffer(-inset_m, join_style="mitre").intersection(planner)
     if shrunk.is_empty:
         return []
     parts = shrunk.geoms if isinstance(shrunk, MultiPolygon) else [shrunk]
@@ -212,7 +221,7 @@ def main():
 
     print(f"Dunya: {world_path}  (dunya adi: {info['name']})")
     print(f"  {info['tasks']} serit, {info['obstacles']} engel ({cfg.OBSTACLE_INSET_M} m iceriden, "
-          f"{cfg.OBSTACLE_HEIGHT_M} m yukseklik, collision yok)")
+          f"planlayicinin %{OBSTACLE_SCALE * 100:g} engeliyle kesisim, {cfg.OBSTACLE_HEIGHT_M} m yukseklik, collision yok)")
     if info["skipped"]:
         print(f"  UYARI: kucultulunce yok olan engeller cizilmedi: {info['skipped']}")
     print(f"GUI ayari: {gui_path}  (kamera: {camera_pose(load_boundary(args.scenario))})")
